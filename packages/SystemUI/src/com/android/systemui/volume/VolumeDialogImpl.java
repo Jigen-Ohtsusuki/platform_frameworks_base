@@ -69,6 +69,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RotateDrawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.media.AppVolume;
 import android.media.AudioManager;
 import android.media.AudioSystem;
@@ -2976,6 +2977,12 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (D.BUG) Log.d(TAG, "onStartTrackingTouch"+ " " + mRow.stream);
             mController.setActiveStream(mRow.stream);
             mRow.tracking = true;
+            TransitionDrawable transition = (TransitionDrawable) mContext.getDrawable(
+                R.drawable.volume_row_seekbar_transition
+            );
+            transition.setCrossFadeEnabled(true);
+            mRow.slider.setProgressDrawable(transition);
+            transition.startTransition(250);
         }
 
         @Override
@@ -2988,6 +2995,12 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
             if (mRow.ss.level != userLevel) {
                 mHandler.sendMessageDelayed(mHandler.obtainMessage(H.RECHECK, mRow),
                         USER_ATTEMPT_GRACE_PERIOD);
+            }
+            Drawable progressDrawable = mRow.slider.getProgressDrawable();
+            if (progressDrawable instanceof TransitionDrawable) {
+                TransitionDrawable transition = (TransitionDrawable) progressDrawable;
+                transition.setCrossFadeEnabled(true);
+                transition.reverseTransition(250);
             }
         }
     }
