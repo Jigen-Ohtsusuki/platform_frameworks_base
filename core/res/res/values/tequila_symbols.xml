@@ -5,9 +5,6 @@
 -->
 <resources>
 
-    <!-- Build properties from a GMS certified device against current platform SPL level -->
-    <java-symbol type="array" name="config_certifiedBuildProperties" />
-    
     <!-- Package Manager -->
     <java-symbol type="array" name="config_deviceDisabledComponents" />
     <java-symbol type="array" name="config_globallyDisabledComponents" />
