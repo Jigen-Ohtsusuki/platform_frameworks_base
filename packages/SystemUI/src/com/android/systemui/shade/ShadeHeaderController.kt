@@ -23,7 +23,6 @@ import android.app.PendingIntent
 import android.app.StatusBarManager
 import android.content.Context
 import android.content.Intent
-import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
