@@ -1448,18 +1448,6 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
                     hideRingerDrawer();
                 }
             });
-            mExpandRows.setOnLongClickListener(new View.OnLongClickListener() {
-                @Override
-                public boolean onLongClick(View v) {
-                    mMediaOutputDialogManager.dismiss();
-                    if (mDialog != null) {
-                        mDialog.dismiss();
-                    }
-                    mVolumeNavigator.openVolumePanel(
-                            mVolumePanelNavigationInteractor.getVolumePanelRoute());
-                    return true;
-                }
-            });
         }
     }
 
