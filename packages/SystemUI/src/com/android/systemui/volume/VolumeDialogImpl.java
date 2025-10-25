@@ -2219,14 +2219,18 @@ public class VolumeDialogImpl implements VolumeDialog, Dumpable,
         }
     }
 
-    /**
+     /**
      * Toggles enable state of views in a VolumeRow (not including seekbar or icon)
      * Hides/shows zen icon
      * @param enable whether to enable volume row views and hide dnd icon
      */
     private void enableVolumeRowViewsH(VolumeRow row, boolean enable) {
         boolean showDndIcon = !enable;
-        row.dndIcon.setVisibility(showDndIcon ? VISIBLE : GONE);
+        // Add a null check, as the dnd_icon view might have been
+        // removed from the layout in a custom ROM.
+        if (row.dndIcon != null) {
+            row.dndIcon.setVisibility(showDndIcon ? VISIBLE : GONE);
+        }
     }
 
     /**

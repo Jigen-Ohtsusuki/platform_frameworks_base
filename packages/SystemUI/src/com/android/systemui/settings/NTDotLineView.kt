@@ -23,7 +23,7 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
 
-import com.android.systemui.res.R
+import com.android.systemui.R
 
 class NTDotLineView @JvmOverloads constructor(
     context: Context,
