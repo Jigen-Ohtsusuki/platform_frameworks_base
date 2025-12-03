@@ -20,6 +20,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+    
+    <!-- OLD HORIZONTAL LAYOUT - KEEP HIDDEN FOR COMPATIBILITY -->
     <ImageView
         android:id="@+id/actions_container_background"
         android:visibility="gone"
@@ -33,6 +35,7 @@
         app:layout_constraintTop_toTopOf="@+id/actions_container"
         app:layout_constraintEnd_toEndOf="@+id/actions_container"
         app:layout_constraintBottom_toTopOf="@id/guideline"/>
+    
     <HorizontalScrollView
         android:id="@+id/actions_container"
         android:layout_width="0dp"
@@ -42,6 +45,7 @@
         android:paddingVertical="@dimen/overlay_action_container_padding_vertical"
         android:elevation="4dp"
         android:scrollbars="none"
+        android:visibility="gone"
         app:layout_constraintHorizontal_bias="0"
         app:layout_constraintWidth_percent="1.0"
         app:layout_constraintWidth_max="wrap"
@@ -61,6 +65,73 @@
                      android:visibility="gone" />
         </LinearLayout>
     </HorizontalScrollView>
+    
+    <!-- NEW VERTICAL ACTION BUTTONS - BESIDE SCREENSHOT -->
+    <LinearLayout
+        android:id="@+id/screenshot_actions_vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:elevation="8dp"
+        android:padding="8dp"
+        android:background="@drawable/action_chip_container_background"
+        android:layout_marginStart="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/screenshot_preview_border"
+        app:layout_constraintTop_toTopOf="@id/screenshot_preview_border"
+        app:layout_constraintBottom_toBottomOf="@id/screenshot_preview_border">
+        
+        <!-- Share Button -->
+        <FrameLayout
+            android:id="@+id/screenshot_share_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/action_chip_background"
+            android:clickable="true"
+            android:focusable="true">
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_screenshot_share"
+                android:tint="?androidprv:attr/materialColorOnSecondary"/>
+        </FrameLayout>
+        
+        <!-- Edit Button -->
+        <FrameLayout
+            android:id="@+id/screenshot_edit_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/action_chip_background"
+            android:clickable="true"
+            android:focusable="true">
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_screenshot_edit"
+                android:tint="?androidprv:attr/materialColorOnSecondary"/>
+        </FrameLayout>
+        
+        <!-- Delete Button -->
+        <FrameLayout
+            android:id="@+id/screenshot_delete_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/action_chip_background"
+            android:clickable="true"
+            android:focusable="true">
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_screenshot_delete"
+                android:tint="?androidprv:attr/materialColorOnSecondary"/>
+        </FrameLayout>
+    </LinearLayout>
+    
     <View
         android:id="@+id/screenshot_preview_border"
         android:layout_width="0dp"
@@ -72,10 +143,11 @@
         android:elevation="8dp"
         android:alpha="0"
         android:background="@drawable/overlay_border"
-        app:layout_constraintStart_toStartOf="@id/actions_container_background"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="@id/screenshot_preview"
         app:layout_constraintEnd_toEndOf="@id/screenshot_preview"
-        app:layout_constraintBottom_toBottomOf="@id/actions_container_background"/>
+        app:layout_constraintBottom_toBottomOf="@id/guideline"/>
+        
     <ImageView
         android:id="@+id/screenshot_preview"
         android:visibility="invisible"
@@ -92,6 +164,7 @@
         android:clickable="true"
         app:layout_constraintStart_toStartOf="@id/screenshot_preview_border"
         app:layout_constraintBottom_toBottomOf="@id/screenshot_preview_border"/>
+        
     <ImageView
         android:id="@+id/screenshot_badge"
         android:layout_width="56dp"
@@ -100,6 +173,7 @@
         android:elevation="9dp"
         app:layout_constraintBottom_toBottomOf="@id/screenshot_preview_border"
         app:layout_constraintEnd_toEndOf="@id/screenshot_preview_border"/>
+        
     <FrameLayout
         android:id="@+id/screenshot_dismiss_button"
         android:layout_width="@dimen/overlay_dismiss_button_tappable_size"
@@ -122,6 +196,7 @@
             android:padding="4dp"
             android:src="@drawable/ic_close"/>
     </FrameLayout>
+    
     <ImageView
         android:id="@+id/screenshot_scrollable_preview"
         android:layout_width="wrap_content"

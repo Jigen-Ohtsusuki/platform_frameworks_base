@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -161,6 +161,13 @@ public class ScreenshotView extends FrameLayout implements
 
     private final ArrayList<OverlayActionChip> mSmartChips = new ArrayList<>();
     private PendingInteraction mPendingInteraction;
+
+    // Vertical action buttons
+    private LinearLayout mActionsVertical;
+    private FrameLayout mShareButton;
+    private FrameLayout mEditButton;
+    private FrameLayout mDeleteButton;
+
     // Should only be set/used if the SCREENSHOT_METADATA flag is set.
     private ScreenshotData mScreenshotData;
 
@@ -287,9 +294,21 @@ public class ScreenshotView extends FrameLayout implements
         mScreenshotPreview.getBoundsOnScreen(tmpRect);
         tmpRect.inset(swipePadding, swipePadding);
         swipeRegion.op(tmpRect, Region.Op.UNION);
-        mActionsContainerBackground.getBoundsOnScreen(tmpRect);
-        tmpRect.inset(swipePadding, swipePadding);
-        swipeRegion.op(tmpRect, Region.Op.UNION);
+
+        // Add vertical buttons to swipe region
+        if (mActionsVertical.getVisibility() == View.VISIBLE) {
+            mActionsVertical.getBoundsOnScreen(tmpRect);
+            tmpRect.inset(swipePadding, swipePadding);
+            swipeRegion.op(tmpRect, Region.Op.UNION);
+        }
+
+        // OLD: Only add if horizontal layout is visible
+        if (mActionsContainerBackground.getVisibility() == View.VISIBLE) {
+            mActionsContainerBackground.getBoundsOnScreen(tmpRect);
+            tmpRect.inset(swipePadding, swipePadding);
+            swipeRegion.op(tmpRect, Region.Op.UNION);
+        }
+
         mDismissButton.getBoundsOnScreen(tmpRect);
         swipeRegion.op(tmpRect, Region.Op.UNION);
 
@@ -380,6 +399,12 @@ public class ScreenshotView extends FrameLayout implements
         mShareChip = requireNonNull(mActionsContainer.findViewById(R.id.screenshot_share_chip));
         mEditChip = requireNonNull(mActionsContainer.findViewById(R.id.screenshot_edit_chip));
         mScrollChip = requireNonNull(mActionsContainer.findViewById(R.id.screenshot_scroll_chip));
+
+        // Initialize vertical action buttons
+        mActionsVertical = requireNonNull(findViewById(R.id.screenshot_actions_vertical));
+        mShareButton = requireNonNull(findViewById(R.id.screenshot_share_button));
+        mEditButton = requireNonNull(findViewById(R.id.screenshot_edit_button));
+        mDeleteButton = requireNonNull(findViewById(R.id.screenshot_delete_button));
 
         setFocusable(true);
         mActionsContainer.setScrollX(0);
@@ -681,62 +706,16 @@ public class ScreenshotView extends FrameLayout implements
         } catch (RemoteException e) {
         }
 
-        ArrayList<OverlayActionChip> chips = new ArrayList<>();
-
-        mShareChip.setContentDescription(mContext.getString(R.string.screenshot_share_description));
-        mShareChip.setIcon(Icon.createWithResource(mContext, R.drawable.ic_screenshot_share), true);
-        mShareChip.setOnClickListener(v -> {
-            mShareChip.setIsPending(true);
-            mEditChip.setIsPending(false);
-            if (mQuickShareChip != null) {
-                mQuickShareChip.setIsPending(false);
-            }
-            mPendingInteraction = PendingInteraction.SHARE;
-        });
-        chips.add(mShareChip);
-
-        mEditChip.setContentDescription(
-                mContext.getString(R.string.screenshot_edit_description));
-        mEditChip.setIcon(Icon.createWithResource(mContext, R.drawable.ic_screenshot_edit),
-                true);
-        mEditChip.setOnClickListener(v -> {
-            mEditChip.setIsPending(true);
-            mShareChip.setIsPending(false);
-            if (mQuickShareChip != null) {
-                mQuickShareChip.setIsPending(false);
-            }
-            mPendingInteraction = PendingInteraction.EDIT;
-        });
-        chips.add(mEditChip);
-
-        mScreenshotPreview.setOnClickListener(v -> {
-            mShareChip.setIsPending(false);
-            mEditChip.setIsPending(false);
-            if (mQuickShareChip != null) {
-                mQuickShareChip.setIsPending(false);
-            }
-            mPendingInteraction = PendingInteraction.PREVIEW;
-        });
-
-        mScrollChip.setText(mContext.getString(R.string.screenshot_scroll_label));
-        mScrollChip.setIcon(Icon.createWithResource(mContext,
-                R.drawable.ic_screenshot_scroll), true);
-        chips.add(mScrollChip);
-
-        // remove the margin from the last chip so that it's correctly aligned with the end
-        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams)
-                mActionsView.getChildAt(0).getLayoutParams();
-        params.setMarginEnd(0);
-        mActionsView.getChildAt(0).setLayoutParams(params);
-
+        // Use vertical layout instead of horizontal
         ValueAnimator animator = ValueAnimator.ofFloat(0, 1);
         animator.setDuration(SCREENSHOT_ACTIONS_EXPANSION_DURATION_MS);
-        float alphaFraction = (float) SCREENSHOT_ACTIONS_ALPHA_DURATION_MS
-                / SCREENSHOT_ACTIONS_EXPANSION_DURATION_MS;
-        mActionsContainer.setAlpha(0f);
-        mActionsContainerBackground.setAlpha(0f);
-        mActionsContainer.setVisibility(View.VISIBLE);
-        mActionsContainerBackground.setVisibility(View.VISIBLE);
+
+        mActionsVertical.setAlpha(0f);
+        mActionsVertical.setVisibility(View.VISIBLE);
+
+        // Hide old horizontal layout
+        mActionsContainer.setVisibility(View.GONE);
+        mActionsContainerBackground.setVisibility(View.GONE);
 
         animator.addListener(new AnimatorListenerAdapter() {
             @Override
@@ -762,22 +741,18 @@ public class ScreenshotView extends FrameLayout implements
 
         animator.addUpdateListener(animation -> {
             float t = animation.getAnimatedFraction();
-            float containerAlpha = t < alphaFraction ? t / alphaFraction : 1;
-            mActionsContainer.setAlpha(containerAlpha);
-            mActionsContainerBackground.setAlpha(containerAlpha);
-            float containerScale = SCREENSHOT_ACTIONS_START_SCALE_X
-                    + (t * (1 - SCREENSHOT_ACTIONS_START_SCALE_X));
-            mActionsContainer.setScaleX(containerScale);
-            mActionsContainerBackground.setScaleX(containerScale);
-            for (OverlayActionChip chip : chips) {
-                chip.setAlpha(t);
-                chip.setScaleX(1 / containerScale); // invert to keep size of children constant
-            }
-            mActionsContainer.setScrollX(mDirectionLTR ? 0 : mActionsContainer.getWidth());
-            mActionsContainer.setPivotX(mDirectionLTR ? 0 : mActionsContainer.getWidth());
-            mActionsContainerBackground.setPivotX(
-                    mDirectionLTR ? 0 : mActionsContainerBackground.getWidth());
+            mActionsVertical.setAlpha(t);
+
+            // Scale animation for buttons
+            float scale = 0.7f + (t * 0.3f); // From 0.7 to 1.0
+            mShareButton.setScaleX(scale);
+            mShareButton.setScaleY(scale);
+            mEditButton.setScaleX(scale);
+            mEditButton.setScaleY(scale);
+            mDeleteButton.setScaleX(scale);
+            mDeleteButton.setScaleY(scale);
         });
+
         return animator;
     }
 
@@ -787,7 +762,8 @@ public class ScreenshotView extends FrameLayout implements
     }
 
     void setChipIntents(ScreenshotController.SavedImageData imageData) {
-        mShareChip.setOnClickListener(v -> {
+        // Share button
+        mShareButton.setOnClickListener(v -> {
             mUiEventLogger.log(ScreenshotEvent.SCREENSHOT_SHARE_TAPPED, 0, mPackageName);
             prepareSharedTransition();
 
@@ -804,7 +780,9 @@ public class ScreenshotView extends FrameLayout implements
                     imageData.shareTransition.get().bundle,
                     imageData.owner, false);
         });
-        mEditChip.setOnClickListener(v -> {
+
+        // Edit button
+        mEditButton.setOnClickListener(v -> {
             mUiEventLogger.log(ScreenshotEvent.SCREENSHOT_EDIT_TAPPED, 0, mPackageName);
             prepareSharedTransition();
             mActionExecutor.launchIntentAsync(
@@ -812,6 +790,45 @@ public class ScreenshotView extends FrameLayout implements
                     imageData.editTransition.get().bundle,
                     imageData.owner, true);
         });
+
+        // Delete button - direct delete with Toast feedback
+        mDeleteButton.setOnClickListener(v -> {
+            if (DEBUG_INPUT) {
+                Log.d(TAG, "delete button clicked");
+            }
+            mUiEventLogger.log(
+                    ScreenshotEvent.SCREENSHOT_EXPLICIT_DISMISSAL, 0, mPackageName);
+    
+            // Delete the screenshot file
+            if (imageData != null && imageData.uri != null) {
+                try {
+                    int deleted = mContext.getContentResolver().delete(imageData.uri, null, null);
+                    if (deleted > 0) {
+                        if (DEBUG_INPUT) {
+                            Log.d(TAG, "Screenshot deleted: " + imageData.uri);
+                        }
+                        // Show toast notification
+                        android.widget.Toast.makeText(mContext, 
+                            "Screenshot deleted", 
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    } else {
+                        Log.w(TAG, "Failed to delete screenshot");
+                        android.widget.Toast.makeText(mContext, 
+                            "Failed to delete screenshot", 
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error deleting screenshot", e);
+                    android.widget.Toast.makeText(mContext, 
+                        "Error deleting screenshot", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                }
+            }
+    
+            animateDismissal();
+        });
+
+        // Screenshot preview click - open in editor
         mScreenshotPreview.setOnClickListener(v -> {
             mUiEventLogger.log(ScreenshotEvent.SCREENSHOT_PREVIEW_TAPPED, 0, mPackageName);
             prepareSharedTransition();
@@ -820,39 +837,23 @@ public class ScreenshotView extends FrameLayout implements
                     imageData.editTransition.get().bundle,
                     imageData.owner, true);
         });
-        if (mQuickShareChip != null) {
-            if (imageData.quickShareAction != null) {
-                mQuickShareChip.setPendingIntent(imageData.quickShareAction.actionIntent,
-                        () -> {
-                            mUiEventLogger.log(
-                                    ScreenshotEvent.SCREENSHOT_SMART_ACTION_TAPPED, 0,
-                                    mPackageName);
-                            animateDismissal();
-                        });
-            } else {
-                // hide chip and unset pending interaction if necessary, since we don't actually
-                // have a useable quick share intent
-                Log.wtf(TAG, "Showed quick share chip, but quick share intent was null");
-                if (mPendingInteraction == PendingInteraction.QUICK_SHARE) {
-                    mPendingInteraction = null;
-                }
-                mQuickShareChip.setVisibility(GONE);
-            }
-        }
 
+        // Handle pending interaction
         if (mPendingInteraction != null) {
             switch (mPendingInteraction) {
                 case PREVIEW:
                     mScreenshotPreview.callOnClick();
                     break;
                 case SHARE:
-                    mShareChip.callOnClick();
+                    mShareButton.callOnClick();
                     break;
                 case EDIT:
-                    mEditChip.callOnClick();
+                    mEditButton.callOnClick();
                     break;
                 case QUICK_SHARE:
-                    mQuickShareChip.callOnClick();
+                    if (mQuickShareChip != null) {
+                        mQuickShareChip.callOnClick();
+                    }
                     break;
             }
         } else {
@@ -1009,6 +1010,8 @@ public class ScreenshotView extends FrameLayout implements
         }
         mDismissButton.setVisibility(View.GONE);
         mActionsContainer.setVisibility(View.GONE);
+        mActionsVertical.setVisibility(View.GONE);
+
         // set these invisible, but not gone, so that the views are laid out correctly
         mActionsContainerBackground.setVisibility(View.INVISIBLE);
         mScreenshotPreviewBorder.setVisibility(View.INVISIBLE);
@@ -1029,10 +1032,15 @@ public class ScreenshotView extends FrameLayout implements
         if (mAccessibilityManager.isEnabled()) {
             mDismissButton.setVisibility(View.VISIBLE);
         }
-        mActionsContainer.setVisibility(View.VISIBLE);
-        mActionsContainerBackground.setVisibility(View.VISIBLE);
+
+        // Show vertical buttons instead of horizontal
+        mActionsVertical.setVisibility(View.VISIBLE);
+        mActionsContainer.setVisibility(View.GONE);
+        mActionsContainerBackground.setVisibility(View.GONE);
+
         mScreenshotPreviewBorder.setVisibility(View.VISIBLE);
         mScreenshotPreview.setVisibility(View.VISIBLE);
+
         // reset the timeout
         mCallbacks.onUserInteraction();
     }
@@ -1083,6 +1091,13 @@ public class ScreenshotView extends FrameLayout implements
         mShareChip.setIsPending(false);
         mEditChip.setIsPending(false);
         mPendingInteraction = null;
+
+        // Reset vertical buttons
+        mActionsVertical.setVisibility(View.GONE);
+        mShareButton.setOnClickListener(null);
+        mEditButton.setOnClickListener(null);
+        mDeleteButton.setOnClickListener(null);
+
         for (OverlayActionChip chip : mSmartChips) {
             mActionsView.removeView(chip);
         }
