@@ -152,7 +152,8 @@ public class ToastPresenter {
         params.setTitle(WINDOW_TITLE);
         params.flags = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED;
         setShowForAllUsersIfApplicable(params, mPackageName);
         return params;
     }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="WindowBlurView">
+        <attr name="blurRadius" format="integer" />
+        <attr name="blurBackgroundColourOpacity" format="float" />
+        <attr name="cornerRadius" format="dimension" />
+        <attr name="backgroundColour" format="reference|color" />
+    </declare-styleable>
+</resources>

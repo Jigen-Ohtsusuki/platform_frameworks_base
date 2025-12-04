@@ -929,4 +929,8 @@
 
     <!-- Flag controlling whether visual query attention detection has been enabled. -->
     <bool name="config_enableVisualQueryAttentionDetection">false</bool>
+
+    <integer name="background_blur_radius">80</integer>
+    <item name="background_blur_colour_opacity" format="float" type="dimen">0.20</item>
+    
 </resources>
