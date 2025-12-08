@@ -4,7 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
  * except in compliance with the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software distributed under the
  * License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -847,6 +847,15 @@ public class QSFragment extends LifecycleFragment implements QS, CommandQueue.Ca
     @Override
     public void closeCustomizer() {
         mQSCustomizerController.hide();
+        if (mQuickQSPanelController != null) {
+            mQuickQSPanelController.refreshAllTiles();
+            mQuickQSPanelController.setTiles();
+            getView().post(() -> {
+                if (mQuickQSPanelController != null) {
+                    mQuickQSPanelController.setTiles();
+                }
+            });
+        }
     }
 
     public void notifyCustomizeChanged() {
@@ -1023,10 +1032,10 @@ public class QSFragment extends LifecycleFragment implements QS, CommandQueue.Ca
     /**
      * A {@link LifecycleOwner} whose state is driven by the current state of this fragment:
      *
-     *  - DESTROYED when the fragment is destroyed.
-     *  - CREATED when mListening == mQsVisible == false.
-     *  - STARTED when mListening == true && mQsVisible == false.
-     *  - RESUMED when mListening == true && mQsVisible == true.
+     * - DESTROYED when the fragment is destroyed.
+     * - CREATED when mListening == mQsVisible == false.
+     * - STARTED when mListening == true && mQsVisible == false.
+     * - RESUMED when mListening == true && mQsVisible == true.
      */
     @VisibleForTesting
     class ListeningAndVisibilityLifecycleOwner implements LifecycleOwner {

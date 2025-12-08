@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -213,16 +213,16 @@ public class QSPanel extends LinearLayout implements Tunable {
     private void setBrightnessViewMargin(boolean top) {
         if (mBrightnessView != null) {
             MarginLayoutParams lp = (MarginLayoutParams) mBrightnessView.getLayoutParams();
-            if (top) {
-                lp.topMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qs_top_brightness_margin_top);
-                lp.bottomMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qs_top_brightness_margin_bottom);
-            } else {
-                lp.topMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qs_bottom_brightness_margin_top);
-                lp.bottomMargin = 0;
-            }
+            
+            // [FIX] Force Height to match Tile Height (Nothing OS Style)
+            lp.height = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_height);
+            
+            // [FIX] Always use these margins because we are forcing bottom position
+            lp.topMargin = mContext.getResources()
+                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_top);
+            lp.bottomMargin = mContext.getResources()
+                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_bottom);
+            
             mBrightnessView.setLayoutParams(lp);
         }
     }
@@ -455,9 +455,9 @@ public class QSPanel extends LinearLayout implements Tunable {
 
     /**
      * @return true if the margin bottom of the media view should be on the media host or false
-     *         if they should be on the HorizontalLinearLayout. Returning {@code false} is useful
-     *         to visually center the tiles in the Media view, which doesn't work when the
-     *         expanded panel actually scrolls.
+     * if they should be on the HorizontalLinearLayout. Returning {@code false} is useful
+     * to visually center the tiles in the Media view, which doesn't work when the
+     * expanded panel actually scrolls.
      */
     protected boolean displayMediaMarginsOnMedia() {
         return true;
@@ -474,25 +474,22 @@ public class QSPanel extends LinearLayout implements Tunable {
         return true;
     }
 
+    // [FIX] FORCE ORDER: Tiles -> Brightness -> Footer
     private void switchAllContentToParent(ViewGroup parent, QSTileLayout newLayout) {
         int index = parent == this ? mMovableContentStartIndex : 0;
 
-        if (mBrightnessView != null && mTop) {
-            switchToParent(mBrightnessView, parent, index);
-            index++;
-        }
-
-        // Let's first move the tileLayout to the new parent, since that should come first.
+        // 1. Tile Layout (and its page indicators) go FIRST
         switchToParent((View) newLayout, parent, index);
         index++;
 
-        if (mBrightnessView != null && !mTop) {
+        // 2. Brightness Slider goes SECOND (below tiles)
+        if (mBrightnessView != null) {
             switchToParent(mBrightnessView, parent, index);
             index++;
         }
 
+        // 3. Footer goes LAST
         if (mFooter != null) {
-            // Then the footer with the settings
             switchToParent(mFooter, parent, index);
             index++;
         }
@@ -536,6 +533,12 @@ public class QSPanel extends LinearLayout implements Tunable {
     public void setExpanded(boolean expanded) {
         if (mExpanded == expanded) return;
         mExpanded = expanded;
+        
+        // Disable edit mode when collapsing
+        if (!expanded) {
+            TileLayout.disableEditMode();
+        }
+        
         if (!mExpanded && mTileLayout instanceof PagedTileLayout) {
             ((PagedTileLayout) mTileLayout).setCurrentItem(0, false);
         }
@@ -793,7 +796,12 @@ public class QSPanel extends LinearLayout implements Tunable {
         /**
          * Sets the expansion value and proposedTranslation to panel.
          */
-        default void setExpansion(float expansion, float proposedTranslation) {}
+        default void setExpansion(float expansion, float proposedTranslation) {
+            // When QS panel is collapsed (expansion = 0), disable edit mode
+            if (expansion == 0f) {
+                TileLayout.disableEditMode();
+            }
+        }
 
         int getNumVisibleTiles();
 

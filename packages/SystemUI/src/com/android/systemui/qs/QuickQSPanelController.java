@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,6 +20,8 @@ import static com.android.systemui.media.dagger.MediaModule.QUICK_QS_PANEL;
 import static com.android.systemui.qs.dagger.QSFragmentModule.QS_USING_COLLAPSED_LANDSCAPE_MEDIA;
 import static com.android.systemui.qs.dagger.QSFragmentModule.QS_USING_MEDIA_PLAYER;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.logging.MetricsLogger;
@@ -46,7 +48,6 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 
-/** Controller for {@link QuickQSPanel}. */
 @QSScope
 public class QuickQSPanelController extends QSPanelControllerBase<QuickQSPanel> {
 
@@ -56,6 +57,9 @@ public class QuickQSPanelController extends QSPanelControllerBase<QuickQSPanel> 
     private final BrightnessSliderController mBrightnessSliderController;
     private final BrightnessMirrorHandler mBrightnessMirrorHandler;
     private BrightnessMirrorController mBrightnessMirrorController;
+    
+    private static final String PREFS_FILE = "qs_tile_config";
+    private static final String PREF_PREFIX_SHAPE = "tile_is_circle_";
 
     @Inject
     QuickQSPanelController(QuickQSPanel view, QSHost qsHost,
@@ -89,6 +93,12 @@ public class QuickQSPanelController extends QSPanelControllerBase<QuickQSPanel> 
         mMediaHost.setShowsOnlyActiveMedia(true);
         mMediaHost.init(MediaHierarchyManager.LOCATION_QQS);
         mBrightnessSliderController.init();
+        
+        mView.setUsingHorizontalLayout(false, mMediaHost.getHostView(), false);
+        mView.setShouldMoveMediaOnExpansion(false);
+        
+        // CRITICAL FIX: Subscribe to TileLayout resize events to refresh QQS immediately
+        TileLayout.addResizeListener(this::setTiles);
     }
 
     private void updateMediaExpansion() {
@@ -142,8 +152,6 @@ public class QuickQSPanelController extends QSPanelControllerBase<QuickQSPanel> 
     void setListening(boolean listening) {
         super.setListening(listening);
 
-        // Set the listening as soon as the QS fragment starts listening regardless of the
-        //expansion, so it will update the current brightness before the slider is visible.
         if (listening) {
             mBrightnessController.registerCallbacks();
         } else {
@@ -168,23 +176,53 @@ public class QuickQSPanelController extends QSPanelControllerBase<QuickQSPanel> 
 
     @Override
     protected void onConfigurationChanged() {
-        int newMaxTiles = getResources().getInteger(R.integer.quick_qs_panel_max_tiles);
-        if (newMaxTiles != mView.getNumQuickTiles()) {
-            setMaxTiles(newMaxTiles);
-        }
         updateMediaExpansion();
+        setTiles();
     }
 
     @Override
     public void setTiles() {
         List<QSTile> tiles = new ArrayList<>();
+        
+        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
+        
+        int currentRow = 0;
+        int currentColumn = 0;
+        int maxColumns = 4;
+        int maxRows = 2;
+        
         for (QSTile tile : mHost.getTiles()) {
-            tiles.add(tile);
-            if (tiles.size() == mView.getNumQuickTiles()) {
+            boolean isCircle = prefs.getBoolean(PREF_PREFIX_SHAPE + tile.getTileSpec(), true);
+            int span = isCircle ? 1 : 2;
+
+            if (currentColumn + span > maxColumns) {
+                currentRow++;
+                currentColumn = 0;
+            }
+
+            if (currentRow >= maxRows) {
                 break;
             }
+
+            tiles.add(tile);
+            
+            currentColumn += span;
+            
+            if (currentColumn >= maxColumns) {
+                currentRow++;
+                currentColumn = 0;
+            }
         }
-        super.setTiles(tiles, /* collapsedView */ true);
+        
+        super.setTiles(tiles, true);
+        
+        // Force immediate layout update
+        if (mView != null) {
+            mView.post(() -> {
+                mView.requestLayout();
+                mView.invalidate();
+            });
+        }
     }
 
     public void setContentMargins(int marginStart, int marginEnd) {
