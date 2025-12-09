@@ -6,7 +6,7 @@
  *
  */
 
-package com.android.server.crdroid;
+package com.android.server.tequila;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -17,7 +17,7 @@ import android.os.SystemProperties;
 import android.util.Log;
 
 import com.android.server.SystemService;
-import com.android.internal.util.crdroid.Utils;
+import com.android.internal.util.tequila.Utils;
 
 import java.io.BufferedReader;
 import java.io.File;
