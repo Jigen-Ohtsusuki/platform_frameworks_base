@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2025 Neoteric OS
  * SPDX-License-Identifier: Apache-2.0
  */
-package com.android.internal.util.crdroid;
+package com.android.internal.util.tequila;
 
 import android.security.keystore.KeyProperties;
 import android.system.keystore2.KeyEntryResponse;

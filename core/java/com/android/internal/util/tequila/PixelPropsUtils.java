@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.util.crdroid;
+package com.android.internal.util.tequila;
 
 import android.app.ActivityTaskManager;
 import android.app.Application;

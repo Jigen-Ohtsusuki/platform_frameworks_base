@@ -52,7 +52,7 @@ import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
 
-import com.android.internal.util.crdroid.KeyboxImitationHooks;
+import com.android.internal.util.tequila.KeyboxImitationHooks;
 
 import libcore.util.EmptyArray;
 

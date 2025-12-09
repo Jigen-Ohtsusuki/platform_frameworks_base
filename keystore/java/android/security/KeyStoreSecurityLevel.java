@@ -33,7 +33,7 @@ import android.system.keystore2.KeyMetadata;
 import android.system.keystore2.ResponseCode;
 import android.util.Log;
 
-import com.android.internal.util.crdroid.KeyboxImitationHooks;
+import com.android.internal.util.tequila.KeyboxImitationHooks;
 
 import java.util.Calendar;
 import java.util.Collection;

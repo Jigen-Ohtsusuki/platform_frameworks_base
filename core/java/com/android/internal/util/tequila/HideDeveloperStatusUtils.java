@@ -1,4 +1,4 @@
-package com.android.internal.util.crdroid;
+package com.android.internal.util.tequila;
 
 import android.content.ContentResolver;
 import android.content.Context;
