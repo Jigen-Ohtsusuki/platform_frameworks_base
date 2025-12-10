@@ -72,10 +72,6 @@
     <java-symbol type="string" name="charging_control_notification_content_target" />
     <java-symbol type="string" name="charging_control_notification_content_target_reached" />
 
-    <!-- SystemUI Restart -->
-    <java-symbol type="string" name="systemui_restart_title" />
-    <java-symbol type="string" name="systemui_restart_message" />
-
     <!-- Advanced reboot -->
     <java-symbol type="string" name="reboot_to_recovery_title" />
     <java-symbol type="string" name="reboot_to_recovery_message" />

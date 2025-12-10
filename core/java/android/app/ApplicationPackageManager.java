@@ -802,11 +802,6 @@ public class ApplicationPackageManager extends PackageManager {
                 @Override
                 public Boolean recompute(HasSystemFeatureQuery query) {
                     try {
-                        Boolean maybeHasSystemFeature =
-                                RoSystemFeatures.maybeHasFeature(query.name, query.version);
-                        if (maybeHasSystemFeature != null) {
-                            return maybeHasSystemFeature.booleanValue();
-                        }
                         return ActivityThread.currentActivityThread().getPackageManager().
                             hasSystemFeature(query.name, query.version);
                     } catch (RemoteException e) {

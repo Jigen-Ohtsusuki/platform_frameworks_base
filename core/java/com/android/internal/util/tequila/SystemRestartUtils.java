@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.util.crdroid;
+package com.android.internal.util.tequila;
 
 import android.app.AlertDialog;
 import android.app.IActivityManager;
@@ -66,7 +66,7 @@ public class SystemRestartUtils {
                 if (mBarService != null) {
                     try {
                         Thread.sleep(RESTART_TIMEOUT);
-                        mBarService.reboot(false, null);
+                        mBarService.reboot(false); 
                     } catch (RemoteException | InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -131,4 +131,3 @@ public class SystemRestartUtils {
         showRestartDialog(context, R.string.systemui_restart_title, R.string.systemui_restart_message, () -> restartProcess(context, "com.android.systemui"));
     }
 }
-
