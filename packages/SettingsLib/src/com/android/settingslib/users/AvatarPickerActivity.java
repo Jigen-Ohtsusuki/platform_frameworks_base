@@ -51,18 +51,6 @@ import java.util.List;
 
 /**
  * Activity to allow the user to choose a user profile picture.
- *
- * <p>Options are provided to take a photo or choose a photo using the photo picker. In addition,
- * preselected avatar images may be provided in the resource array {@code avatar_images}. If
- * provided, every element of that array must be a bitmap drawable.
- *
- * <p>If preselected images are not provided, the default avatar will be shown instead, in a range
- * of colors.
- *
- * <p>This activity should be started with startActivityForResult. If a photo or a preselected image
- * is selected, a Uri will be returned in the data field of the result intent. If a colored default
- * avatar is selected, the chosen color will be returned as {@code EXTRA_DEFAULT_ICON_TINT_COLOR}
- * and the data field will be empty.
  */
 public class AvatarPickerActivity extends Activity {
 
@@ -97,8 +85,15 @@ public class AvatarPickerActivity extends Activity {
         RecyclerView recyclerView = findViewById(R.id.avatar_grid);
         mAdapter = new AvatarAdapter();
         recyclerView.setAdapter(mAdapter);
-        recyclerView.setLayoutManager(new GridLayoutManager(this,
-                getResources().getInteger(R.integer.avatar_picker_columns)));
+
+        int columns = 2; 
+
+        int colResId = getResources().getIdentifier("avatar_picker_columns", "integer", getPackageName());
+        if (colResId != 0) {
+            columns = getResources().getInteger(colResId);
+        }
+
+        recyclerView.setLayoutManager(new GridLayoutManager(this, columns));
 
         restoreState(savedInstanceState);
 
@@ -215,7 +210,22 @@ public class AvatarPickerActivity extends Activity {
             mChoosePhotoPosition = (canChoosePhoto ? (canTakePhoto ? 1 : 0) : NONE);
             mPreselectedImageStartPosition = (canTakePhoto ? 1 : 0) + (canChoosePhoto ? 1 : 0);
 
-            mPreselectedImages = getResources().obtainTypedArray(R.array.avatar_images);
+            int imagesId = getResources().getIdentifier("avatar_images", "array", getPackageName());
+
+            if (imagesId == 0) {
+                 try {
+                     imagesId = R.array.avatar_images;
+                 } catch (Exception e) {
+                     imagesId = 0; 
+                 }
+            }
+
+            if (imagesId != 0) {
+                mPreselectedImages = getResources().obtainTypedArray(imagesId);
+            } else {
+                 mPreselectedImages = null; 
+            }
+
             mUserIconColors = UserIcons.getUserIconColors(getResources());
             mImageDrawables = buildDrawableList();
             mImageDescriptions = buildDescriptionsList();
@@ -280,12 +290,17 @@ public class AvatarPickerActivity extends Activity {
         private List<Drawable> buildDrawableList() {
             List<Drawable> result = new ArrayList<>();
 
-            for (int i = 0; i < mPreselectedImages.length(); i++) {
-                Drawable drawable = mPreselectedImages.getDrawable(i);
-                if (drawable instanceof BitmapDrawable) {
-                    result.add(circularDrawableFrom((BitmapDrawable) drawable));
-                } else {
-                    throw new IllegalStateException("Avatar drawables must be bitmaps");
+            if (mPreselectedImages != null) {
+                for (int i = 0; i < mPreselectedImages.length(); i++) {
+                    Drawable drawable = mPreselectedImages.getDrawable(i);
+                    if (drawable instanceof BitmapDrawable) {
+                        result.add(circularDrawableFrom((BitmapDrawable) drawable));
+                    } else if (drawable != null) {
+                         Bitmap bitmap = UserIcons.convertToBitmapAtUserIconSize(getResources(), drawable);
+                         RoundedBitmapDrawable rounded = RoundedBitmapDrawableFactory.create(getResources(), bitmap);
+                         rounded.setCircular(true);
+                         result.add(rounded);
+                    }
                 }
             }
             if (!result.isEmpty()) {
@@ -300,11 +315,17 @@ public class AvatarPickerActivity extends Activity {
         }
 
         private List<String> buildDescriptionsList() {
-            if (mPreselectedImages.length() > 0) {
-                return Arrays.asList(
-                        getResources().getStringArray(R.array.avatar_image_descriptions));
+            int descId = getResources().getIdentifier("avatar_image_descriptions", "array", getPackageName());
+            
+            if (descId == 0) {
+                 try {
+                     descId = R.array.avatar_image_descriptions;
+                 } catch (Exception e) { return null; }
             }
 
+            if (mPreselectedImages != null && mPreselectedImages.length() > 0 && descId != 0) {
+                return Arrays.asList(getResources().getStringArray(descId));
+            }
             return null;
         }
 
@@ -341,7 +362,7 @@ public class AvatarPickerActivity extends Activity {
 
         private void returnSelectionResult() {
             int index = indexFromPosition(mSelectedPosition);
-            if (mPreselectedImages.length() > 0) {
+            if (mPreselectedImages != null && mPreselectedImages.length() > 0) {
                 int resourceId = mPreselectedImages.getResourceId(index, -1);
                 if (resourceId == -1) {
                     throw new IllegalStateException("Preselected avatar images must be resources.");
@@ -388,3 +409,4 @@ public class AvatarPickerActivity extends Activity {
         }
     }
 }
+ 
