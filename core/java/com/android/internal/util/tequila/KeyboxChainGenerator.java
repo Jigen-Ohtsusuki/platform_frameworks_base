@@ -65,9 +65,6 @@ import java.util.Set;
 
 import javax.security.auth.x500.X500Principal;
 
-/**
- * @hide
- */
 public final class KeyboxChainGenerator {
 
     private static final String TAG = "KeyboxChainGenerator";
@@ -161,7 +158,6 @@ public final class KeyboxChainGenerator {
             var AecCurve = new ASN1Integer(params.ecCurve);
             var AnoAuthRequired = DERNull.INSTANCE;
 
-            // To be loaded
             var AosVersion = new ASN1Integer(getOsVersion());
             var AosPatchLevel = new ASN1Integer(getPatchLevel());
 
@@ -189,7 +185,6 @@ public final class KeyboxChainGenerator {
 
             ASN1Encodable[] teeEnforcedEncodables;
 
-            // Support device properties attestation
             if (params.brand != null) {
                 var Abrand = new DEROctetString(params.brand);
                 var Adevice = new DEROctetString(params.device);
@@ -343,20 +338,16 @@ public final class KeyboxChainGenerator {
     }
 
     private static KeyPair buildECKeyPair(KeyGenParameters params) throws Exception {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
-        Security.addProvider(new BouncyCastleProvider());
         ECGenParameterSpec spec = new ECGenParameterSpec(params.ecCurveName);
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
         kpg.initialize(spec);
         return kpg.generateKeyPair();
     }
 
     private static KeyPair buildRSAKeyPair(KeyGenParameters params) throws Exception {
-        Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
-        Security.addProvider(new BouncyCastleProvider());
         RSAKeyGenParameterSpec spec = new RSAKeyGenParameterSpec(
                 params.keySize, params.rsaPublicExponent);
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
         kpg.initialize(spec);
         return kpg.generateKeyPair();
     }
