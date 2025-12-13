@@ -52,15 +52,12 @@ import com.android.systemui.tuner.TunerService.Tunable;
 import java.util.ArrayList;
 import java.util.List;
 
-/** View that represents the quick settings tile panel (when expanded/pulled down). **/
 public class QSPanel extends LinearLayout implements Tunable {
 
     public static final String QS_SHOW_AUTO_BRIGHTNESS =
             Settings.Secure.QS_SHOW_AUTO_BRIGHTNESS;
     public static final String QS_SHOW_BRIGHTNESS_SLIDER =
             Settings.Secure.QS_SHOW_BRIGHTNESS_SLIDER;
-    public static final String QS_BRIGHTNESS_SLIDER_POSITION =
-            Settings.Secure.QS_BRIGHTNESS_SLIDER_POSITION;
 
     private static final String TAG = "QSPanel";
 
@@ -70,9 +67,6 @@ public class QSPanel extends LinearLayout implements Tunable {
 
     private Runnable mCollapseExpandAction;
 
-    /**
-     * The index where the content starts that needs to be moved between parents
-     */
     private int mMovableContentStartIndex;
 
     @Nullable
@@ -84,9 +78,6 @@ public class QSPanel extends LinearLayout implements Tunable {
 
     protected Runnable mBrightnessRunnable;
 
-    protected boolean mTop;
-
-    /** Whether or not the QS media player feature is enabled. */
     protected boolean mUsingMediaPlayer;
 
     protected boolean mExpanded;
@@ -118,10 +109,6 @@ public class QSPanel extends LinearLayout implements Tunable {
     private ViewGroup mMediaHostView;
     private boolean mShouldMoveMediaOnExpansion = true;
     private QSLogger mQsLogger;
-    /**
-     * Specifies if we can collapse to QQS in current state. In split shade that should be always
-     * false. It influences available accessibility actions.
-     */
     private boolean mCanCollapse = true;
 
     public QSPanel(Context context, AttributeSet attrs) {
@@ -139,9 +126,6 @@ public class QSPanel extends LinearLayout implements Tunable {
 
         mIsAutomaticBrightnessAvailable = getResources().getBoolean(
                 com.android.internal.R.bool.config_automatic_brightness_available);
-
-        TunerService tunerService = Dependency.get(TunerService.class);
-        mTop = tunerService.getValue(QS_BRIGHTNESS_SLIDER_POSITION, 1) == 0;
     }
 
     void initialize(QSLogger qsLogger) {
@@ -175,8 +159,6 @@ public class QSPanel extends LinearLayout implements Tunable {
     protected void setHorizontalContentContainerClipping() {
         mHorizontalContentContainer.setClipChildren(true);
         mHorizontalContentContainer.setClipToPadding(false);
-        // Don't clip on the top, that way, secondary pages tiles can animate up
-        // Clipping coordinates should be relative to this view, not absolute (parent coordinates)
         mHorizontalContentContainer.addOnLayoutChangeListener(
                 (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
                     if ((right - left) != (oldRight - oldLeft)
@@ -191,11 +173,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         mHorizontalContentContainer.setClipBounds(mClippingRect);
     }
 
-    /**
-     * Add brightness view above the tile layout.
-     *
-     * Used to add the brightness slider after construction.
-     */
     public void setBrightnessView(@NonNull View view) {
         if (mBrightnessView != null) {
             removeView(mBrightnessView);
@@ -203,31 +180,27 @@ public class QSPanel extends LinearLayout implements Tunable {
         }
         mBrightnessView = view;
         mAutoBrightnessView = view.findViewById(R.id.brightness_icon);
-        setBrightnessViewMargin(mTop);
+        setBrightnessViewMargin();
         if (mBrightnessView != null) {
             addView(mBrightnessView);
             mMovableContentStartIndex++;
         }
     }
 
-    private void setBrightnessViewMargin(boolean top) {
+    private void setBrightnessViewMargin() {
         if (mBrightnessView != null) {
             MarginLayoutParams lp = (MarginLayoutParams) mBrightnessView.getLayoutParams();
             
-            // [FIX] Force Height to match Tile Height (Nothing OS Style)
             lp.height = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_height);
             
-            // [FIX] Always use these margins because we are forcing bottom position
             lp.topMargin = mContext.getResources()
-                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_top);
-            lp.bottomMargin = mContext.getResources()
-                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_bottom);
+                    .getDimensionPixelSize(R.dimen.qs_bottom_brightness_margin_top);
+            lp.bottomMargin = 0;
             
             mBrightnessView.setLayoutParams(lp);
         }
     }
 
-    /** */
     public QSTileLayout getOrCreateTileLayout() {
         if (mTileLayout == null) {
             mTileLayout = (QSTileLayout) LayoutInflater.from(mContext)
@@ -256,35 +229,20 @@ public class QSPanel extends LinearLayout implements Tunable {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         if (mTileLayout instanceof PagedTileLayout) {
-            // Since PageIndicator gets measured before PagedTileLayout, we preemptively set the
-            // # of pages before the measurement pass so PageIndicator is measured appropriately
             if (mFooterPageIndicator != null) {
                 mFooterPageIndicator.setNumPages(((PagedTileLayout) mTileLayout).getNumPages());
             }
 
-            // In landscape, mTileLayout's parent is not the panel but a view that contains the
-            // tile layout and the media controls.
             if (((View) mTileLayout).getParent() == this) {
-                // Allow the UI to be as big as it want's to, we're in a scroll view
                 int newHeight = 10000;
                 int availableHeight = MeasureSpec.getSize(heightMeasureSpec);
                 int excessHeight = newHeight - availableHeight;
-                // Measure with EXACTLY. That way, The content will only use excess height and will
-                // be measured last, after other views and padding is accounted for. This only
-                // works because our Layouts in here remeasure themselves with the exact content
-                // height.
                 heightMeasureSpec = MeasureSpec.makeMeasureSpec(newHeight, MeasureSpec.EXACTLY);
                 ((PagedTileLayout) mTileLayout).setExcessHeight(excessHeight);
             }
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        // We want all the logic of LinearLayout#onMeasure, and for it to assign the excess space
-        // not used by the other children to PagedTileLayout. However, in this case, LinearLayout
-        // assumes that PagedTileLayout would use all the excess space. This is not the case as
-        // PagedTileLayout height is quantized (because it shows a certain number of rows).
-        // Therefore, after everything is measured, we need to make sure that we add up the correct
-        // total height
         int height = getPaddingBottom() + getPaddingTop();
         int numChildren = getChildCount();
         for (int i = 0; i < numChildren; i++) {
@@ -309,7 +267,6 @@ public class QSPanel extends LinearLayout implements Tunable {
     }
 
     private void updateViewPositions() {
-        // Adjust view positions based on tile squishing
         int tileHeightOffset = mTileLayout.getTilesHeight() - mTileLayout.getHeight();
 
         boolean move = false;
@@ -322,11 +279,6 @@ public class QSPanel extends LinearLayout implements Tunable {
                 } else {
                     topOffset = tileHeightOffset;
                 }
-                // Animation can occur before the layout pass, meaning setSquishinessFraction() gets
-                // called before onLayout(). So, a child view could be null because it has not
-                // been added to mChildrenLayoutTop yet (which happens in onLayout()).
-                // We use a continue statement here to catch this NPE because, on the layout pass,
-                // this code will be called again from onLayout() with the populated children views.
                 Integer childLayoutTop = mChildrenLayoutTop.get(child);
                 if (childLayoutTop == null) {
                     continue;
@@ -355,10 +307,6 @@ public class QSPanel extends LinearLayout implements Tunable {
                     mBrightnessView.setVisibility(value ? VISIBLE : GONE);
                 }
                 break;
-            case QS_BRIGHTNESS_SLIDER_POSITION:
-                mTop = TunerService.parseInteger(newValue, 1) == 0;
-                updateBrightnessSliderPosition();
-                break;
             case QS_SHOW_AUTO_BRIGHTNESS:
                 if (mAutoBrightnessView != null) {
                     mAutoBrightnessView.setVisibility(mIsAutomaticBrightnessAvailable &&
@@ -380,11 +328,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         return mBrightnessView;
     }
 
-    /**
-     * Links the footer's page indicator, which is used in landscape orientation to save space.
-     *
-     * @param pageIndicator indicator to use for page scrolling
-     */
     public void setFooterPageIndicator(PageIndicator pageIndicator) {
         if (mTileLayout instanceof PagedTileLayout) {
             mFooterPageIndicator = pageIndicator;
@@ -404,10 +347,8 @@ public class QSPanel extends LinearLayout implements Tunable {
 
     public void updateResources() {
         updatePadding();
-
         updatePageIndicator();
-
-        setBrightnessViewMargin(mTop);
+        setBrightnessViewMargin();
 
         if (mTileLayout != null) {
             mTileLayout.updateResources();
@@ -453,19 +394,10 @@ public class QSPanel extends LinearLayout implements Tunable {
         }
     }
 
-    /**
-     * @return true if the margin bottom of the media view should be on the media host or false
-     * if they should be on the HorizontalLinearLayout. Returning {@code false} is useful
-     * to visually center the tiles in the Media view, which doesn't work when the
-     * expanded panel actually scrolls.
-     */
     protected boolean displayMediaMarginsOnMedia() {
         return true;
     }
 
-    /**
-     * @return true if the media view needs margin on the top to separate it from the qs tiles
-     */
     protected boolean mediaNeedsTopMargin() {
         return false;
     }
@@ -474,21 +406,17 @@ public class QSPanel extends LinearLayout implements Tunable {
         return true;
     }
 
-    // [FIX] FORCE ORDER: Tiles -> Brightness -> Footer
     private void switchAllContentToParent(ViewGroup parent, QSTileLayout newLayout) {
         int index = parent == this ? mMovableContentStartIndex : 0;
 
-        // 1. Tile Layout (and its page indicators) go FIRST
         switchToParent((View) newLayout, parent, index);
         index++;
 
-        // 2. Brightness Slider goes SECOND (below tiles)
         if (mBrightnessView != null) {
             switchToParent(mBrightnessView, parent, index);
             index++;
         }
 
-        // 3. Footer goes LAST
         if (mFooter != null) {
             switchToParent(mFooter, parent, index);
             index++;
@@ -499,7 +427,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         switchToParent(child, parent, index, getDumpableTag());
     }
 
-    /** Call when orientation has changed and MediaHost needs to be adjusted. */
     private void reAttachMediaHost(ViewGroup hostView, boolean horizontal) {
         if (!mUsingMediaPlayer) {
             return;
@@ -518,14 +445,10 @@ public class QSPanel extends LinearLayout implements Tunable {
             layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT;
             layoutParams.width = horizontal ? 0 : ViewGroup.LayoutParams.MATCH_PARENT;
             layoutParams.weight = horizontal ? 1f : 0;
-            // Add any bottom margin, such that the total spacing is correct. This is only
-            // necessary if the view isn't horizontal, since otherwise the padding is
-            // carried in the parent of this view (to ensure correct vertical alignment)
             layoutParams.bottomMargin = !horizontal || displayMediaMarginsOnMedia()
                     ? Math.max(mMediaTotalBottomMargin - getPaddingBottom(), 0) : 0;
             layoutParams.topMargin = mediaNeedsTopMargin() && !horizontal
                     ? mMediaTopMargin : 0;
-            // Call setLayoutParams explicitly to ensure that requestLayout happens
             hostView.setLayoutParams(layoutParams);
         }
     }
@@ -534,7 +457,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         if (mExpanded == expanded) return;
         mExpanded = expanded;
         
-        // Disable edit mode when collapsing
         if (!expanded) {
             TileLayout.disableEditMode();
         }
@@ -554,7 +476,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         return mExpanded;
     }
 
-    /** */
     public void setListening(boolean listening) {
         mListening = listening;
     }
@@ -610,18 +531,12 @@ public class QSPanel extends LinearLayout implements Tunable {
         return mTileLayout;
     }
 
-    /** */
     public void setContentMargins(int startMargin, int endMargin, ViewGroup mediaHostView) {
-        // Only some views actually want this content padding, others want to go all the way
-        // to the edge like the brightness slider
         mContentMarginStart = startMargin;
         mContentMarginEnd = endMargin;
         updateMediaHostContentMargins(mediaHostView);
     }
 
-    /**
-     * Update the margins of the media hosts
-     */
     protected void updateMediaHostContentMargins(ViewGroup mediaHostView) {
         if (mUsingMediaPlayer) {
             int marginStart = 0;
@@ -633,13 +548,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         }
     }
 
-    /**
-     * Update the margins of a view.
-     *
-     * @param view the view to adjust
-     * @param start the start margin to set
-     * @param end the end margin to set
-     */
     protected void updateMargins(View view, int start, int end) {
         LayoutParams lp = (LayoutParams) view.getLayoutParams();
         if (lp != null) {
@@ -686,15 +594,6 @@ public class QSPanel extends LinearLayout implements Tunable {
         updatePadding();
     }
 
-    /**
-     * Sets whether the media container should move during the expansion of the QS Panel.
-     *
-     * As the QS Panel expands and the QS unsquish, the views below the QS tiles move to adapt to
-     * the new height of the QS tiles.
-     *
-     * In some cases this might not be wanted for media. One example is when there is a transition
-     * animation of the media container happening on split shade lock screen.
-     */
     public void setShouldMoveMediaOnExpansion(boolean shouldMoveMediaOnExpansion) {
         mShouldMoveMediaOnExpansion = shouldMoveMediaOnExpansion;
     }
@@ -723,88 +622,33 @@ public class QSPanel extends LinearLayout implements Tunable {
         mCollapseExpandAction = action;
     }
 
-    /**
-     * Specifies if these expanded QS can collapse to QQS.
-     */
     public void setCanCollapse(boolean canCollapse) {
         mCanCollapse = canCollapse;
     }
 
-    protected void updateBrightnessSliderPosition() {
-        if (mBrightnessView == null) return;
-        ViewGroup newParent = mUsingHorizontalLayout ? mHorizontalContentContainer : this;
-        switchAllContentToParent(newParent, mTileLayout);
-        if (mBrightnessRunnable != null) {
-            updateResources();
-            mBrightnessRunnable.run();
-        }
-    }
-
     public interface QSTileLayout {
-        /** */
         default void saveInstanceState(Bundle outState) {}
-
-        /** */
         default void restoreInstanceState(Bundle savedInstanceState) {}
-
-        /** */
         void addTile(QSPanelControllerBase.TileRecord tile);
-
-        /** */
         void removeTile(QSPanelControllerBase.TileRecord tile);
-
-        /** */
         int getOffsetTop(QSPanelControllerBase.TileRecord tile);
-
-        /** */
         boolean updateResources();
-
-        /** */
         void setListening(boolean listening, UiEventLogger uiEventLogger);
-
-        /** */
         int getHeight();
-
-        /** */
         int getTilesHeight();
-
-        /**
-         * Sets a size modifier for the tile. Where 0 means collapsed, and 1 expanded.
-         */
         void setSquishinessFraction(float squishinessFraction);
-
-        /**
-         * Sets the minimum number of rows to show
-         *
-         * @param minRows the minimum.
-         */
         default boolean setMinRows(int minRows) {
             return false;
         }
-
-        /**
-         * Sets the max number of columns to show
-         *
-         * @param maxColumns the maximum
-         *
-         * @return true if the number of visible columns has changed.
-         */
         default boolean setMaxColumns(int maxColumns) {
             return false;
         }
-
-        /**
-         * Sets the expansion value and proposedTranslation to panel.
-         */
         default void setExpansion(float expansion, float proposedTranslation) {
-            // When QS panel is collapsed (expansion = 0), disable edit mode
             if (expansion == 0f) {
                 TileLayout.disableEditMode();
             }
         }
-
         int getNumVisibleTiles();
-
         default void setLogger(QSLogger qsLogger) { }
     }
 
@@ -827,10 +671,8 @@ public class QSPanel extends LinearLayout implements Tunable {
             parent.addView(child, index);
             return;
         }
-        // Same parent, we are just changing indices
         int currentIndex = parent.indexOfChild(child);
         if (currentIndex == index) {
-            // We want to be in the same place. Nothing to do here
             return;
         }
         parent.removeView(child);

@@ -38,9 +38,6 @@ import com.android.systemui.qs.logging.QSLogger;
 import com.android.systemui.qs.tileimpl.QSTileViewImpl;
 import com.android.systemui.tuner.TunerService;
 
-/**
- * Version of QSPanel that only shows N Quick Tiles in the QS Header.
- */
 public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
 
     private static final String TAG = "QuickQSPanel";
@@ -54,7 +51,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
 
     public QuickQSPanel(Context context, AttributeSet attrs) {
         super(context, attrs);
-        // Set to high number to accept whatever the Controller sends us
         mMaxTiles = 50; 
     }
 
@@ -71,14 +67,10 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
         }
         mBrightnessView = view;
         mAutoBrightnessView = view.findViewById(R.id.brightness_icon);
-        setBrightnessViewMargin(mTop);
+        setBrightnessViewMargin();
         if (mBrightnessView != null) {
             addView(mBrightnessView);
-
-            TunerService tunerService = Dependency.get(TunerService.class);
-            if (tunerService.getValue(QS_SHOW_BRIGHTNESS_SLIDER, 2) > 1) {
-                mBrightnessView.setVisibility(VISIBLE);
-            }
+            mBrightnessView.setVisibility(GONE);
         }
     }
 
@@ -86,19 +78,12 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
         return mBrightnessView;
     }
 
-    private void setBrightnessViewMargin(boolean top) {
+    private void setBrightnessViewMargin() {
         if (mBrightnessView != null) {
             MarginLayoutParams lp = (MarginLayoutParams) mBrightnessView.getLayoutParams();
-            if (top) {
-                lp.topMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qqs_top_brightness_margin_top);
-                lp.bottomMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qqs_top_brightness_margin_bottom);
-            } else {
-                lp.topMargin = mContext.getResources()
-                        .getDimensionPixelSize(R.dimen.qqs_bottom_brightness_margin_top);
-                lp.bottomMargin = 0;
-            }
+            lp.topMargin = mContext.getResources()
+                    .getDimensionPixelSize(R.dimen.qqs_bottom_brightness_margin_top);
+            lp.bottomMargin = 0;
             mBrightnessView.setLayoutParams(lp);
         }
     }
@@ -161,7 +146,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
     }
 
     public void setMaxTiles(int maxTiles) {
-        // Force high number to prevent truncation. The Controller handles logic.
         mMaxTiles = 50;
     }
 
@@ -169,8 +153,7 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
     public void onTuningChanged(String key, String newValue) {
         switch (key) {
             case QS_SHOW_BRIGHTNESS_SLIDER:
-                boolean value = TunerService.parseInteger(newValue, 2) > 1;
-                super.onTuningChanged(key, value ? newValue : "0");
+                super.onTuningChanged(key, "0");
                 break;
             default:
                 super.onTuningChanged(key, newValue);
@@ -234,7 +217,7 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
         private boolean mLastSelected;
 
         QQSSideLabelTileLayout(Context context) {
-            super(context, null); // FIXED: Added null for AttributeSet
+            super(context, null);
             setClipChildren(false);
             setClipToPadding(false);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT,
@@ -242,7 +225,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
             setLayoutParams(lp);
             setMaxColumns(4);
             setMinRows(2);
-            // CRITICAL FIX: Force registration to TileLayout updates so QQS updates immediately
             TileLayout.addLayout(this);
         }
 
@@ -276,16 +258,11 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
         @Override
         public void addTile(TileRecord tile) {
             super.addTile(tile);
-            // CRITICAL FIX: Disable all edit interactions in QQS
             if (tile.tileView instanceof QSTileViewImpl) {
                 QSTileViewImpl qsView = (QSTileViewImpl) tile.tileView;
-                // Remove resize click listener so handles don't appear/work
                 qsView.setOnResizeClickListener(null);
-                // Ensure edit mode visual is off
                 qsView.setEditMode(false);
-                // Disable long click to prevent crashing/editing from QQS
                 qsView.setOnLongClickListener(null);
-                // Ensure the view itself doesn't trap long clicks
                 qsView.setLongClickable(false);
             }
         }
@@ -345,7 +322,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
 
                 if (record.tileView instanceof QSTileViewImpl) {
                     ((QSTileViewImpl) record.tileView).setTileMode(isCircle);
-                    // QQS should NEVER be in edit mode
                     ((QSTileViewImpl) record.tileView).setEditMode(false);
                 }
 
@@ -395,9 +371,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
                     column = 0;
                 }
                 
-                // If we are past the 2nd row, hide the tile.
-                // With Controller logic, this should basically never happen, but it's a failsafe.
-                // We do NOT 'continue' here to keep grid logic running.
                 if (row >= 2) {
                     record.tileView.layout(0, 0, 0, 0);
                 } else {
@@ -441,7 +414,6 @@ public class QuickQSPanel extends QSPanel implements TunerService.Tunable {
 
         @Override
         public void setExpansion(float expansion, float proposedTranslation) {
-            // CRITICAL: Disable edit mode when collapsing to QQS
             if (expansion <= 0f) {
                 TileLayout.disableEditMode();
             }

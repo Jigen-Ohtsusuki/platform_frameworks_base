@@ -11,12 +11,6 @@
      <dimen name="network_traffic_width">25sp</dimen>
 
      <!-- QQS Brightness slider -->
-     <dimen name="qqs_top_brightness_margin_top">24px</dimen>
-     <dimen name="qqs_top_brightness_margin_bottom">24px</dimen>
      <dimen name="qqs_bottom_brightness_margin_top">24px</dimen>
-
-     <!-- QS Brightness slider -->
-     <dimen name="qs_top_brightness_margin_top">24px</dimen>
-     <dimen name="qs_top_brightness_margin_bottom">24px</dimen>
      <dimen name="qs_bottom_brightness_margin_top">24px</dimen>
 </resources>
