@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2021 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.android.systemui.qs.tileimpl
 
 import android.animation.ArgbEvaluator
@@ -58,6 +42,7 @@ import com.android.systemui.plugins.qs.QSTileView
 import com.android.systemui.qs.logging.QSLogger
 import com.android.systemui.qs.tileimpl.QSIconViewImpl.QS_ANIM_LENGTH
 import java.util.Objects
+import android.content.SharedPreferences
 
 private const val TAG = "QSTileViewImpl"
 
@@ -76,16 +61,19 @@ open class QSTileViewImpl @JvmOverloads constructor(
         const val UNAVAILABLE_ALPHA = 0.3f
         @VisibleForTesting
         internal const val TILE_STATE_RES_PREFIX = "tile_states_"
+
+        const val SHAPE_PREFS_NAME = "qs_tile_config"
+        const val SHAPE_KEY_PREFIX = "tile_is_circle_"
     }
 
+    private var mTileSpec: String? = null
     private var _position: Int = INVALID
-    
+
     private var isCircle: Boolean = false
     private var isEditMode: Boolean = false
-    
-    // UI CONFIGURATION
-    private val HANDLE_SIZE_DP = 24 // Slightly smaller to fit better
-    private val HANDLE_MARGIN_DP = 2 // Positive margin to keep it INSIDE
+
+    private val HANDLE_SIZE_DP = 24
+    private val HANDLE_MARGIN_DP = 2
 
     override fun setPosition(position: Int) {
         _position = position
@@ -105,17 +93,26 @@ open class QSTileViewImpl @JvmOverloads constructor(
             updateHeight()
         }
 
-    private val colorActive = Utils.getColorAttrDefaultColor(context, R.attr.shadeActive)
-    private val colorInactive = Utils.getColorAttrDefaultColor(context, R.attr.shadeInactive)
-    private val colorUnavailable = Utils.getColorAttrDefaultColor(context, R.attr.shadeDisabled)
+    private val colorActive =
+        Utils.getColorAttrDefaultColor(context, R.attr.shadeActive)
+    private val colorInactive =
+        Utils.getColorAttrDefaultColor(context, R.attr.shadeInactive)
+    private val colorUnavailable =
+        Utils.getColorAttrDefaultColor(context, R.attr.shadeDisabled)
 
-    private val colorLabelActive = Utils.getColorAttrDefaultColor(context, R.attr.onShadeActive)
-    private val colorLabelInactive = Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactive)
-    private val colorLabelUnavailable = Utils.getColorAttrDefaultColor(context, R.attr.outline)
+    private val colorLabelActive =
+        Utils.getColorAttrDefaultColor(context, R.attr.onShadeActive)
+    private val colorLabelInactive =
+        Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactive)
+    private val colorLabelUnavailable =
+        Utils.getColorAttrDefaultColor(context, R.attr.outline)
 
-    private val colorSecondaryLabelActive = Utils.getColorAttrDefaultColor(context, R.attr.onShadeActiveVariant)
-    private val colorSecondaryLabelInactive = Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactiveVariant)
-    private val colorSecondaryLabelUnavailable = Utils.getColorAttrDefaultColor(context, R.attr.outline)
+    private val colorSecondaryLabelActive =
+        Utils.getColorAttrDefaultColor(context, R.attr.onShadeActiveVariant)
+    private val colorSecondaryLabelInactive =
+        Utils.getColorAttrDefaultColor(context, R.attr.onShadeInactiveVariant)
+    private val colorSecondaryLabelUnavailable =
+        Utils.getColorAttrDefaultColor(context, R.attr.outline)
 
     private lateinit var label: TextView
     protected lateinit var secondaryLabel: TextView
@@ -124,12 +121,12 @@ open class QSTileViewImpl @JvmOverloads constructor(
     private lateinit var customDrawableView: ImageView
     private lateinit var chevronView: ImageView
     private lateinit var dividerView: View
-    
+
     private lateinit var rootContainer: FrameLayout
     private lateinit var contentContainer: LinearLayout
     private lateinit var handleContainer: FrameLayout
     private lateinit var resizeHandle: ImageView
-    
+
     private var mQsLogger: QSLogger? = null
     protected var showRippleEffect = true
     private lateinit var ripple: RippleDrawable
@@ -142,7 +139,7 @@ open class QSTileViewImpl @JvmOverloads constructor(
             setAllColors(
                 animation.getAnimatedValue(BACKGROUND_NAME) as Int,
                 animation.getAnimatedValue(LABEL_NAME) as Int,
-                0, 
+                0,
                 0
             )
         }
@@ -159,42 +156,37 @@ open class QSTileViewImpl @JvmOverloads constructor(
     )
     private var lastDisabledByPolicy = false
     private val locInScreen = IntArray(2)
-    
-    // Store handleLongClick state to check before launching intent
+
     private var mHandlesLongClick: Boolean = false
 
     init {
         val typedValue = TypedValue()
         if (!getContext().theme.resolveAttribute(R.attr.isQsTheme, typedValue, true)) {
-            throw IllegalStateException("QSViewImpl must be inflated with a theme that contains Theme.SystemUI.QuickSettings")
+            throw IllegalStateException(
+                "QSViewImpl must be inflated with a theme that contains Theme.SystemUI.QuickSettings")
         }
         setId(generateViewId())
-        
-        // Ensure clipping is disabled on the parent view to allow handles to show
+
         clipChildren = false
         clipToPadding = false
-        
+
         rootContainer = FrameLayout(context)
         rootContainer.layoutParams = LayoutParams(
-            LayoutParams.MATCH_PARENT,
-            LayoutParams.MATCH_PARENT
-        )
+            LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         rootContainer.clipChildren = false
         rootContainer.clipToPadding = false
-        
+
         contentContainer = LinearLayout(context)
         contentContainer.orientation = LinearLayout.HORIZONTAL
         contentContainer.gravity = Gravity.CENTER_VERTICAL or Gravity.START
         contentContainer.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        )
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         contentContainer.clipChildren = false
         contentContainer.clipToPadding = false
-        
+
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         isFocusable = true
-        
+
         contentContainer.background = createTileBackground()
         setColor(getBackgroundColorForState(QSTile.State.DEFAULT_STATE))
 
@@ -210,9 +202,9 @@ open class QSTileViewImpl @JvmOverloads constructor(
         createAndAddDivider()
         createAndAddLabels()
         createAndAddSideView()
-        
+
         sideView.visibility = GONE
-        
+
         rootContainer.addView(contentContainer)
         createAndAddEditHandles()
         super.addView(rootContainer)
@@ -221,72 +213,71 @@ open class QSTileViewImpl @JvmOverloads constructor(
     private fun createAndAddEditHandles() {
         handleContainer = FrameLayout(context)
         handleContainer.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        )
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         handleContainer.clipChildren = false
         handleContainer.clipToPadding = false
         handleContainer.visibility = GONE
-        
+
         val handleSizePx = (HANDLE_SIZE_DP * resources.displayMetrics.density).toInt()
         val marginPx = (HANDLE_MARGIN_DP * resources.displayMetrics.density).toInt()
-        
+
         resizeHandle = ImageView(context)
         resizeHandle.setImageResource(R.drawable.ic_qs_resize_handle)
         resizeHandle.setColorFilter(Color.WHITE)
         resizeHandle.scaleType = ImageView.ScaleType.CENTER_INSIDE
-        
+
         val handlePadding = (4 * resources.displayMetrics.density).toInt()
         resizeHandle.setPadding(handlePadding, handlePadding, handlePadding, handlePadding)
-        
+
         val resizeBg = GradientDrawable()
         resizeBg.shape = GradientDrawable.OVAL
-        resizeBg.setColor(Color.parseColor("#99000000")) // Slightly transparent black
+        resizeBg.setColor(Color.parseColor("#99000000"))
         resizeHandle.background = resizeBg
-        resizeHandle.elevation = 10f * resources.displayMetrics.density // High elevation to sit on top
-        
+        resizeHandle.elevation = 10f * resources.displayMetrics.density
+
         val resizeParams = FrameLayout.LayoutParams(handleSizePx, handleSizePx)
         resizeParams.gravity = Gravity.BOTTOM or Gravity.END
-        // POSITIVE margins to keep it INSIDE the view bounds so it doesn't get clipped
         resizeParams.setMargins(0, 0, marginPx, marginPx)
-        
         handleContainer.addView(resizeHandle, resizeParams)
         rootContainer.addView(handleContainer)
     }
 
     fun setTileMode(circle: Boolean) {
-        if (isCircle != circle) {
-            isCircle = circle
-            updateResources()
+        if (isCircle == circle) return
+        isCircle = circle
+        updateResources()
+        mTileSpec?.let { spec ->
+            context.getSharedPreferences(SHAPE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(SHAPE_KEY_PREFIX + spec, circle)
+                .apply()
         }
     }
-    
+
     fun setEditMode(enabled: Boolean) {
         if (isEditMode != enabled) {
             isEditMode = enabled
             handleContainer.visibility = if (enabled) VISIBLE else GONE
-            
-            // Re-enable clicks so we can handle them safely
             isClickable = true
-            isLongClickable = true 
-            
+            isLongClickable = true
             if (enabled) {
                 handleContainer.alpha = 0f
                 handleContainer.scaleX = 0.5f
                 handleContainer.scaleY = 0.5f
                 handleContainer.animate()
-                    .alpha(1f)
-                    .scaleX(1f)
-                    .scaleY(1f)
-                    .setDuration(200)
-                    .start()
+                    .alpha(1f).scaleX(1f).scaleY(1f).setDuration(200).start()
             }
         }
     }
-    
+
     fun setOnResizeClickListener(listener: View.OnClickListener?) {
         resizeHandle.setOnClickListener(listener)
     }
+
+    fun getContentContainer(): View = contentContainer
+    fun getLabelContainerView(): View? = if (::labelContainer.isInitialized) labelContainer else null
+    fun getDividerView(): View? = if (::dividerView.isInitialized) dividerView else null
+    fun getIconView(): View = _icon as View
 
     override fun onConfigurationChanged(newConfig: Configuration?) {
         super.onConfigurationChanged(newConfig)
@@ -296,11 +287,9 @@ open class QSTileViewImpl @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         Trace.traceBegin(Trace.TRACE_TAG_APP, "QSTileViewImpl#onMeasure")
         val fixedHeight = context.resources.getDimensionPixelSize(R.dimen.qs_tile_height)
-        val targetWidth = if (isCircle) fixedHeight else MeasureSpec.getSize(widthMeasureSpec)
-        
+        val targetWidth = if (isCircle && !isEditMode) fixedHeight else MeasureSpec.getSize(widthMeasureSpec)
         val newWidthSpec = MeasureSpec.makeMeasureSpec(targetWidth, MeasureSpec.EXACTLY)
         val newHeightSpec = MeasureSpec.makeMeasureSpec(fixedHeight, MeasureSpec.EXACTLY)
-        
         super.onMeasure(newWidthSpec, newHeightSpec)
         setMeasuredDimension(targetWidth, fixedHeight)
         Trace.endSection()
@@ -329,7 +318,7 @@ open class QSTileViewImpl @JvmOverloads constructor(
         val iconParams = _icon.layoutParams as LinearLayout.LayoutParams
         iconParams.height = iconSize
         iconParams.width = iconSize
-        
+
         if (isCircle) {
             iconParams.gravity = Gravity.CENTER
             iconParams.marginStart = 0
@@ -352,7 +341,6 @@ open class QSTileViewImpl @JvmOverloads constructor(
         val divHeight = resources.getDimensionPixelSize(R.dimen.qs_pill_divider_height)
         val divStart = resources.getDimensionPixelSize(R.dimen.qs_pill_divider_margin_start)
         val divEnd = resources.getDimensionPixelSize(R.dimen.qs_pill_divider_margin_end)
-
         val divParams = dividerView.layoutParams as LinearLayout.LayoutParams
         divParams.width = divWidth
         divParams.height = divHeight
@@ -364,7 +352,7 @@ open class QSTileViewImpl @JvmOverloads constructor(
         val labelMargin = resources.getDimensionPixelSize(R.dimen.qs_label_container_margin)
         val labelParams = labelContainer.layoutParams as LinearLayout.LayoutParams
         labelParams.marginStart = labelMargin
-        labelParams.height = ViewGroup.LayoutParams.WRAP_CONTENT 
+        labelParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
         labelParams.gravity = Gravity.CENTER_VERTICAL
         labelContainer.layoutParams = labelParams
 
@@ -372,7 +360,7 @@ open class QSTileViewImpl @JvmOverloads constructor(
         (chevronView.layoutParams as MarginLayoutParams).apply { height = iconSize; width = iconSize }
         val endMargin = resources.getDimensionPixelSize(R.dimen.qs_drawable_end_margin)
         (customDrawableView.layoutParams as MarginLayoutParams).apply { height = iconSize; marginEnd = endMargin }
-        
+
         requestLayout()
     }
 
@@ -392,12 +380,11 @@ open class QSTileViewImpl @JvmOverloads constructor(
     }
 
     private fun createAndAddLabels() {
-        labelContainer = LayoutInflater.from(context)
-                .inflate(R.layout.qs_tile_label, null, false) as IgnorableChildLinearLayout
+        labelContainer = LayoutInflater.from(context).inflate(R.layout.qs_tile_label, null, false) as IgnorableChildLinearLayout
         label = labelContainer.requireViewById(R.id.tile_label)
         secondaryLabel = labelContainer.requireViewById(R.id.app_label)
         secondaryLabel.visibility = GONE
-        
+
         if (collapsed) {
             labelContainer.ignoreLastView = true
             labelContainer.forceUnspecifiedMeasure = true
@@ -405,15 +392,14 @@ open class QSTileViewImpl @JvmOverloads constructor(
         }
         setLabelColor(getLabelColorForState(QSTile.State.DEFAULT_STATE))
         setSecondaryLabelColor(getSecondaryLabelColorForState(QSTile.State.DEFAULT_STATE))
-        
+
         val params = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f)
         params.gravity = Gravity.CENTER_VERTICAL
         contentContainer.addView(labelContainer, params)
     }
 
     private fun createAndAddSideView() {
-        sideView = LayoutInflater.from(context)
-                .inflate(R.layout.qs_tile_side_icon, null, false) as ViewGroup
+        sideView = LayoutInflater.from(context).inflate(R.layout.qs_tile_side_icon, null, false) as ViewGroup
         customDrawableView = sideView.requireViewById(R.id.customDrawable)
         chevronView = sideView.requireViewById(R.id.chevron)
         setChevronColor(getChevronColorForState(QSTile.State.DEFAULT_STATE))
@@ -441,32 +427,28 @@ open class QSTileViewImpl @JvmOverloads constructor(
     override fun getIconWithBackground(): View = icon
 
     override fun init(tile: QSTile) {
-        init({ v -> 
+        mTileSpec = tile.tileSpec
+
+        val prefs: SharedPreferences = context.getSharedPreferences(SHAPE_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        val savedCircle = prefs.getBoolean(SHAPE_KEY_PREFIX + tile.tileSpec, true)
+        if (isCircle != savedCircle) {
+            isCircle = savedCircle
+            updateResources()
+        }
+
+        init({ v ->
             if (!isEditMode) {
-                try {
-                    tile.click(this)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error handling tile click: " + tile.tileSpec, e)
-                }
+                try { tile.click(this) }
+                catch (e: Exception) { Log.e(TAG, "Error handling tile click: ${tile.tileSpec}", e) }
             }
-        }, { v -> 
+        }, { v ->
             if (isEditMode) {
                 false
+            } else if (mHandlesLongClick) {
+                try { tile.longClick(this); true }
+                catch (e: Exception) { Log.e(TAG, "Error handling long click: ${tile.tileSpec}", e); true }
             } else {
-                // FIXED: Check if the tile explicitly handles long click.
-                // This prevents invoking activity starter for tiles (like Flashlight) 
-                // that have no long-click intent, fixing the NPE crash.
-                if (mHandlesLongClick) {
-                    try {
-                        tile.longClick(this)
-                        true
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error handling long click: " + tile.tileSpec, e)
-                        true
-                    }
-                } else {
-                    false
-                }
+                false
             }
         })
     }
@@ -509,11 +491,8 @@ open class QSTileViewImpl @JvmOverloads constructor(
 
     override fun onInitializeAccessibilityEvent(event: AccessibilityEvent) {
         super.onInitializeAccessibilityEvent(event)
-        if (!TextUtils.isEmpty(accessibilityClass)) {
-            event.className = accessibilityClass
-        }
-        if (event.contentChangeTypes == AccessibilityEvent.CONTENT_CHANGE_TYPE_STATE_DESCRIPTION &&
-                stateDescriptionDeltas != null) {
+        if (!TextUtils.isEmpty(accessibilityClass)) event.className = accessibilityClass
+        if (event.contentChangeTypes == AccessibilityEvent.CONTENT_CHANGE_TYPE_STATE_DESCRIPTION && stateDescriptionDeltas != null) {
             event.text.add(stateDescriptionDeltas)
             stateDescriptionDeltas = null
         }
@@ -523,13 +502,11 @@ open class QSTileViewImpl @JvmOverloads constructor(
         super.onInitializeAccessibilityNodeInfo(info)
         info.isSelected = false
         info.text = "${label.text}"
-        
         if (lastDisabledByPolicy) {
             info.addAction(AccessibilityNodeInfo.AccessibilityAction(
-                    AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK.id,
-                    resources.getString(R.string.accessibility_tile_disabled_by_policy_action_description)))
+                AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK.id,
+                resources.getString(R.string.accessibility_tile_disabled_by_policy_action_description)))
         }
-        
         if (!TextUtils.isEmpty(accessibilityClass)) {
             info.className = if (lastDisabledByPolicy) Button::class.java.name else accessibilityClass
             if (Switch::class.java.name == accessibilityClass) {
@@ -537,8 +514,8 @@ open class QSTileViewImpl @JvmOverloads constructor(
                 info.isCheckable = true
                 if (isLongClickable) {
                     info.addAction(AccessibilityNodeInfo.AccessibilityAction(
-                            AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK.id,
-                            resources.getString(R.string.accessibility_long_click_tile)))
+                        AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK.id,
+                        resources.getString(R.string.accessibility_long_click_tile)))
                 }
             }
         }
@@ -550,11 +527,9 @@ open class QSTileViewImpl @JvmOverloads constructor(
     protected open fun handleStateChanged(state: QSTile.State) {
         val allowAnimations = animationsEnabled()
         isClickable = state.state != Tile.STATE_UNAVAILABLE
-        
-        // Store this for the click listener check
         mHandlesLongClick = state.handlesLongClick
         isLongClickable = state.handlesLongClick
-        
+
         icon.setIcon(state, allowAnimations)
         contentDescription = state.contentDescription
 
@@ -563,16 +538,14 @@ open class QSTileViewImpl @JvmOverloads constructor(
             if (tileState != newState) tileState = newState
         }
 
-        if (!Objects.equals(label.text, state.label)) {
-            label.text = state.label
-        }
+        if (!Objects.equals(label.text, state.label)) label.text = state.label
         secondaryLabel.visibility = GONE
 
         if (state.state != lastState || state.disabledByPolicy != lastDisabledByPolicy) {
             singleAnimator.cancel()
             val bgColor = getBackgroundColorForState(state.state, state.disabledByPolicy)
             val lblColor = getLabelColorForState(state.state, state.disabledByPolicy)
-            
+
             if (allowAnimations) {
                 singleAnimator.setValues(
                     colorValuesHolder(BACKGROUND_NAME, paintColor, bgColor),
@@ -583,53 +556,34 @@ open class QSTileViewImpl @JvmOverloads constructor(
                 singleAnimator.start()
             } else {
                 setAllColors(
-                    bgColor, 
-                    lblColor, 
+                    bgColor, lblColor,
                     getSecondaryLabelColorForState(state.state, state.disabledByPolicy),
-                    getChevronColorForState(state.state, state.disabledByPolicy)
-                )
+                    getChevronColorForState(state.state, state.disabledByPolicy))
             }
         }
 
         customDrawableView.visibility = GONE
         chevronView.visibility = GONE
         label.isEnabled = !state.disabledByPolicy
-
         lastState = state.state
         lastDisabledByPolicy = state.disabledByPolicy
     }
 
-    private fun setAllColors(backgroundColor: Int, labelColor: Int, secColor: Int, chevColor: Int) {
-        setColor(backgroundColor)
-        setLabelColor(labelColor)
-        setSecondaryLabelColor(secColor)
-        setChevronColor(chevColor)
-        dividerView.setBackgroundColor(labelColor)
+    private fun setAllColors(bg: Int, lbl: Int, sec: Int, chev: Int) {
+        setColor(bg); setLabelColor(lbl); setSecondaryLabelColor(sec); setChevronColor(chev)
+        dividerView.setBackgroundColor(lbl)
     }
 
     private fun setColor(color: Int) {
-        colorBackgroundDrawable.mutate().setTint(color)
-        paintColor = color
+        colorBackgroundDrawable.mutate().setTint(color); paintColor = color
     }
-
-    private fun setLabelColor(color: Int) {
-        label.setTextColor(color)
-    }
-
-    private fun setSecondaryLabelColor(color: Int) {
-        secondaryLabel.setTextColor(color)
-    }
-
+    private fun setLabelColor(color: Int) { label.setTextColor(color) }
+    private fun setSecondaryLabelColor(color: Int) { secondaryLabel.setTextColor(color) }
     private fun setChevronColor(color: Int) {
         chevronView.imageTintList = ColorStateList.valueOf(color)
     }
 
     private fun loadSideViewDrawableIfNecessary(state: QSTile.State) {}
-
-    private fun getUnavailableText(spec: String?): String {
-        val arrayResId = SubtitleArrayMapping.getSubtitleId(spec)
-        return resources.getStringArray(arrayResId)[Tile.STATE_UNAVAILABLE]
-    }
 
     protected open fun animationsEnabled(): Boolean {
         if (!isShown) return false
@@ -638,42 +592,39 @@ open class QSTileViewImpl @JvmOverloads constructor(
         return locInScreen.get(1) >= -height
     }
 
-    private fun getBackgroundColorForState(state: Int, disabledByPolicy: Boolean = false): Int {
-        return when {
+    private fun getBackgroundColorForState(state: Int, disabledByPolicy: Boolean = false): Int =
+        when {
             state == Tile.STATE_UNAVAILABLE || disabledByPolicy -> colorUnavailable
             state == Tile.STATE_ACTIVE -> colorActive
             state == Tile.STATE_INACTIVE -> colorInactive
             else -> 0
         }
-    }
 
-    private fun getLabelColorForState(state: Int, disabledByPolicy: Boolean = false): Int {
-        return when {
+    private fun getLabelColorForState(state: Int, disabledByPolicy: Boolean = false): Int =
+        when {
             state == Tile.STATE_UNAVAILABLE || disabledByPolicy -> colorLabelUnavailable
             state == Tile.STATE_ACTIVE -> colorLabelActive
             state == Tile.STATE_INACTIVE -> colorLabelInactive
             else -> 0
         }
-    }
 
-    private fun getSecondaryLabelColorForState(state: Int, disabledByPolicy: Boolean = false): Int {
-        return when {
+    private fun getSecondaryLabelColorForState(state: Int, disabledByPolicy: Boolean = false): Int =
+        when {
             state == Tile.STATE_UNAVAILABLE || disabledByPolicy -> colorSecondaryLabelUnavailable
             state == Tile.STATE_ACTIVE -> colorSecondaryLabelActive
             state == Tile.STATE_INACTIVE -> colorSecondaryLabelInactive
             else -> 0
         }
-    }
 
     private fun getChevronColorForState(state: Int, disabledByPolicy: Boolean = false): Int =
-            getSecondaryLabelColorForState(state, disabledByPolicy)
+        getSecondaryLabelColorForState(state, disabledByPolicy)
 
     @VisibleForTesting
     internal fun getCurrentColors(): List<Int> = listOf(
-            paintColor,
-            label.currentTextColor,
-            secondaryLabel.currentTextColor,
-            chevronView.imageTintList?.defaultColor ?: 0
+        paintColor,
+        label.currentTextColor,
+        secondaryLabel.currentTextColor,
+        chevronView.imageTintList?.defaultColor ?: 0
     )
 
     inner class StateChangeRunnable(private val state: QSTile.State) : Runnable {
@@ -683,12 +634,7 @@ open class QSTileViewImpl @JvmOverloads constructor(
     }
 }
 
-fun constrainSquishiness(squish: Float): Float {
-    return 0.1f + squish * 0.9f
-}
+fun constrainSquishiness(squish: Float): Float = 0.1f + squish * 0.9f
 
-private fun colorValuesHolder(name: String, vararg values: Int): PropertyValuesHolder {
-    return PropertyValuesHolder.ofInt(name, *values).apply {
-        setEvaluator(ArgbEvaluator.getInstance())
-    }
-}
+private fun colorValuesHolder(name: String, vararg values: Int): PropertyValuesHolder =
+    PropertyValuesHolder.ofInt(name, *values).apply { setEvaluator(ArgbEvaluator.getInstance()) }

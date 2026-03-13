@@ -18,40 +18,32 @@ package com.android.systemui.qs;
 
 import static com.android.systemui.util.Utils.useQsMediaPlayer;
 
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
-import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
-import android.widget.Toast;
-import android.os.Handler;
-import android.os.Looper;
 
 import androidx.annotation.Nullable;
 
 import com.android.internal.logging.UiEventLogger;
-import com.android.systemui.FontSizeUtils;
 import com.android.systemui.R;
+import com.android.systemui.plugins.qs.QSTile;
 import com.android.systemui.qs.QSPanel.QSTileLayout;
 import com.android.systemui.qs.QSPanelControllerBase.TileRecord;
-import com.android.systemui.qs.tileimpl.HeightOverrideable;
 import com.android.systemui.qs.tileimpl.QSTileViewImpl;
 
 import java.util.ArrayList;
-import java.util.WeakHashMap;
 import java.util.Collections;
-import java.util.Set;
 import java.util.List;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 public class TileLayout extends ViewGroup implements QSTileLayout {
 
@@ -60,19 +52,18 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
     
     private static final String PREFS_FILE = "qs_tile_config";
     private static final String PREF_PREFIX_SHAPE = "tile_is_circle_";
-    
-    private static final long RESIZE_ANIMATION_DURATION = 300;
 
     protected int mColumns;
     protected int mCellWidth;
-    protected int mResourceCellHeightResId = R.dimen.qs_tile_height;
-    protected int mResourceCellHeight;
-    protected int mEstimatedCellHeight;
     protected int mCellHeight;
     protected int mCellMarginHorizontal;
     protected int mCellMarginVertical;
     protected int mSidePadding;
     protected int mRows = 1;
+    
+    protected int mResourceCellHeightResId = R.dimen.qs_tile_height;
+    protected int mResourceCellHeight;
+    protected int mEstimatedCellHeight;
 
     protected final ArrayList<TileRecord> mRecords = new ArrayList<>();
     protected boolean mListening;
@@ -82,29 +73,58 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
     protected int mMinRows = 1;
     private int mMaxColumns = NO_MAX_COLUMNS;
     protected int mResourceColumns;
-    private float mSquishinessFraction = 1f;
     protected int mLastTileBottom;
 
     protected TextView mTempTextView;
-    
-    private static boolean sEditMode = false;
-    private OnRequestLayoutListener mLayoutRequestListener;
-    private Vibrator mVibrator;
-    
-    private AnimatorSet mCurrentResizeAnimation;
-
-    private static final Set<TileLayout> sActiveLayouts = 
-        Collections.newSetFromMap(new WeakHashMap<TileLayout, Boolean>());
-        
-    // New listener list for controllers (like QuickQSPanelController) to subscribe to
-    private static final List<Runnable> sResizeListeners = new ArrayList<>();
 
     public interface OnRequestLayoutListener {
         void onRequestDistribution();
     }
+    
+    private OnRequestLayoutListener mLayoutRequestListener;
 
     public void setOnRequestLayoutListener(OnRequestLayoutListener listener) {
         mLayoutRequestListener = listener;
+    }
+
+    private static final Set<TileLayout> sActiveLayouts = Collections.newSetFromMap(new WeakHashMap<>());
+    private static final List<Runnable> sResizeListeners = new ArrayList<>();
+
+    public static void addLayout(TileLayout layout) {
+        if (layout != null) sActiveLayouts.add(layout);
+    }
+
+    public static void addResizeListener(Runnable listener) {
+        if (!sResizeListeners.contains(listener)) {
+            sResizeListeners.add(listener);
+        }
+    }
+
+    public static void broadcastTileSizeChange() {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            for (TileLayout layout : sActiveLayouts) {
+                if (layout != null) {
+                    for (TileRecord record : layout.mRecords) {
+                        if (record.tileView instanceof QSTileViewImpl) {
+                            String spec = record.tile.getTileSpec();
+                            boolean isCircle = layout.isTileCircle(spec);
+                            ((QSTileViewImpl) record.tileView).setTileMode(isCircle);
+                        }
+                    }
+                    if (layout.mLayoutRequestListener != null) {
+                        layout.mLayoutRequestListener.onRequestDistribution();
+                    }
+                    layout.requestLayout();
+                    layout.invalidate();
+                }
+            }
+            for (Runnable r : sResizeListeners) {
+                r.run();
+            }
+        });
+    }
+
+    public static void disableEditMode() {
     }
 
     public TileLayout(Context context) {
@@ -113,157 +133,22 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
 
     public TileLayout(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
+        setFocusableInTouchMode(true);
         mLessRows = ((Settings.System.getInt(context.getContentResolver(), "qs_less_rows", 0) != 0)
                 || useQsMediaPlayer(context));
         mTempTextView = new TextView(context);
-        mVibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
 
         setClipChildren(false);
         setClipToPadding(false);
 
         updateResources();
-        
         sActiveLayouts.add(this);
-        
-        if (!this.getClass().getSimpleName().contains("QQS")) {
-            setOnLongClickListener(new OnLongClickListener() {
-                @Override
-                public boolean onLongClick(View v) {
-                    toggleEditMode();
-                    return true;
-                }
-            });
-        }
-    }
-    
-    // Allow external controllers to subscribe to resize events
-    public static void addResizeListener(Runnable listener) {
-        if (!sResizeListeners.contains(listener)) {
-            sResizeListeners.add(listener);
-        }
-    }
-    
-    public static void addLayout(TileLayout layout) {
-        if (layout != null) {
-            sActiveLayouts.add(layout);
-        }
     }
     
     private boolean isTileCircle(String tileSpec) {
         if (tileSpec == null) return true;
         SharedPreferences prefs = mContext.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
         return prefs.getBoolean(PREF_PREFIX_SHAPE + tileSpec, true); 
-    }
-
-    private void saveTileShape(String tileSpec, boolean isCircle) {
-        if (tileSpec == null) return;
-        SharedPreferences prefs = mContext.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
-        prefs.edit().putBoolean(PREF_PREFIX_SHAPE + tileSpec, isCircle).apply();
-    }
-    
-    private static void notifyAllLayouts() {
-        new Handler(Looper.getMainLooper()).post(() -> {
-            // 1. Update all views
-            for (TileLayout layout : sActiveLayouts) {
-                if (layout != null) {
-                    layout.updateAllTilesVisuals();
-                    layout.requestLayout();
-                    layout.invalidate();
-                    if (layout.mLayoutRequestListener != null) {
-                        layout.mLayoutRequestListener.onRequestDistribution();
-                    }
-                }
-            }
-            // 2. Notify controllers to refresh their tile lists (Specific Fix for QQS)
-            for (Runnable listener : sResizeListeners) {
-                listener.run();
-            }
-        });
-    }
-    
-    private void toggleEditMode() {
-        sEditMode = !sEditMode;
-        if (mVibrator != null && mVibrator.hasVibrator()) {
-            VibrationEffect effect = VibrationEffect.createPredefined(
-                sEditMode ? VibrationEffect.EFFECT_CLICK : VibrationEffect.EFFECT_TICK
-            );
-            mVibrator.vibrate(effect);
-        }
-        
-        String msg = sEditMode ? "Edit Mode ON - Tap handles to resize" : "Edit Mode OFF";
-        Toast.makeText(mContext, msg, Toast.LENGTH_SHORT).show();
-        
-        notifyAllLayouts();
-    }
-    
-    private void updateAllTilesVisuals() {
-        for (TileRecord record : mRecords) {
-            if (record.tileView instanceof QSTileViewImpl) {
-                ((QSTileViewImpl) record.tileView).setEditMode(sEditMode);
-                if (record.tile != null) {
-                    boolean isCircle = isTileCircle(record.tile.getTileSpec());
-                    ((QSTileViewImpl) record.tileView).setTileMode(isCircle);
-                }
-            }
-        }
-    }
-    
-    public static void disableEditMode() {
-        if (sEditMode) {
-            sEditMode = false;
-            notifyAllLayouts();
-        }
-    }
-    
-    private void onTileResizeClicked(TileRecord record) {
-        if (record.tile == null || !(record.tileView instanceof QSTileViewImpl)) return;
-        
-        String spec = record.tile.getTileSpec();
-        QSTileViewImpl view = (QSTileViewImpl) record.tileView;
-        
-        boolean currentIsCircle = isTileCircle(spec);
-        boolean newShape = !currentIsCircle;
-        
-        if (mVibrator != null && mVibrator.hasVibrator()) {
-            mVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK));
-        }
-        
-        saveTileShape(spec, newShape);
-
-        animateTileResize(view, currentIsCircle, newShape, () -> {
-            notifyAllLayouts();
-        });
-    }
-    
-    private void animateTileResize(QSTileViewImpl view, boolean wasCircle, boolean willBeCircle, Runnable onComplete) {
-        if (mCurrentResizeAnimation != null && mCurrentResizeAnimation.isRunning()) {
-            mCurrentResizeAnimation.cancel();
-        }
-        
-        ObjectAnimator scaleX = ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.9f, 1f);
-        ObjectAnimator scaleY = ObjectAnimator.ofFloat(view, "scaleY", 1f, 0.9f, 1f);
-        ObjectAnimator alpha = ObjectAnimator.ofFloat(view, "alpha", 1f, 0.7f, 1f);
-        
-        mCurrentResizeAnimation = new AnimatorSet();
-        mCurrentResizeAnimation.playTogether(scaleX, scaleY, alpha);
-        mCurrentResizeAnimation.setDuration(RESIZE_ANIMATION_DURATION);
-        
-        mCurrentResizeAnimation.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                view.setTileMode(willBeCircle);
-                view.setScaleX(1f);
-                view.setScaleY(1f);
-                view.setAlpha(1f);
-                
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-                mCurrentResizeAnimation = null;
-            }
-        });
-        
-        mCurrentResizeAnimation.start();
     }
 
     @Override
@@ -308,19 +193,12 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
         
         if (tile.tileView instanceof QSTileViewImpl) {
             QSTileViewImpl view = (QSTileViewImpl) tile.tileView;
-            
             String spec = tile.tile.getTileSpec();
             boolean isCircle = isTileCircle(spec);
             
             view.setTileMode(isCircle);
-            view.setEditMode(sEditMode);
-            
-            view.setOnResizeClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    onTileResizeClicked(tile);
-                }
-            });
+            view.setEditMode(false);
+            view.setOnResizeClickListener(null);
         }
         
         addTileView(tile);
@@ -348,6 +226,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
     public boolean updateResources() {
         Resources res = getResources();
         mResourceColumns = 4;
+        mResourceCellHeightResId = R.dimen.qs_tile_height;
         mResourceCellHeight = res.getDimensionPixelSize(mResourceCellHeightResId);
         mCellMarginHorizontal = res.getDimensionPixelSize(R.dimen.qs_tile_margin_horizontal);
         mSidePadding = useSidePadding() ? mCellMarginHorizontal / 2 : 0;
@@ -360,6 +239,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
             mMaxAllowedRows = Math.max(mMinRows, mMaxAllowedRows - 1);
         }
         mTempTextView.dispatchConfigurationChanged(mContext.getResources().getConfiguration());
+        estimateCellHeight();
         if (updateColumns()) {
             requestLayout();
             return true;
@@ -405,7 +285,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
 
             if (record.tileView instanceof QSTileViewImpl) {
                 ((QSTileViewImpl) record.tileView).setTileMode(isCircle);
-                ((QSTileViewImpl) record.tileView).setEditMode(sEditMode);
+                ((QSTileViewImpl) record.tileView).setEditMode(false);
             }
 
             if (currentColumn + span > mColumns) {
@@ -491,11 +371,10 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
     }
 
     protected int getCellHeight() {
-        return mResourceCellHeight;
+        return Math.max(mResourceCellHeight, mEstimatedCellHeight);
     }
 
     private void layoutTileRecords(int numRecords, boolean forLayout) {
-        final boolean isRtl = getLayoutDirection() == LAYOUT_DIRECTION_RTL;
         
         int row = 0;
         int column = 0; 
@@ -596,10 +475,6 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
 
     @Override
     public void setExpansion(float expansion, float proposedTranslation) {
-        if (expansion == 0f) {
-            TileLayout.disableEditMode();
-        }
-
         int row = 0;
         int column = 0;
         int columns = mColumns > 0 ? mColumns : 4; 

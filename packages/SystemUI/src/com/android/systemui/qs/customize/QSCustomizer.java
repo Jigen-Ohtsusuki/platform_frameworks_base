@@ -16,25 +16,19 @@
 package com.android.systemui.qs.customize;
 
 import android.animation.Animator;
-import android.animation.Animator.AnimatorListener;
 import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.graphics.Color;
-import android.text.SpannableString;
-import android.text.style.ForegroundColorSpan;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.Toolbar;
 
 import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.android.systemui.R;
 import com.android.systemui.plugins.qs.QS;
@@ -44,63 +38,78 @@ import com.android.systemui.qs.QSUtils;
 import com.android.systemui.statusbar.phone.LightBarController;
 
 /**
- * Allows full-screen customization of QS, through show() and hide().
+ * Nothing-OS-style QS customizer panel.
  *
- * This adds itself to the status bar window, so it can appear on top of quick settings and
- * *someday* do fancy animations to get into/out of it.
+ * <p>This replaces the original AOSP single-RecyclerView design with a split architecture:
+ * <ul>
+ *   <li>Top half: {@link ViewPager2} of paginated 4×4 active-tile grids with dot indicators.</li>
+ *   <li>Bottom half: {@link RecyclerView} pool of inactive tiles forced to circle shape.</li>
+ * </ul>
+ *
+ * <p>The toolbar carries only a back-arrow — no title text, no reset menu item.
  */
 public class QSCustomizer extends LinearLayout {
 
-    static final int MENU_RESET = Menu.FIRST;
+    // Kept for Controller/Bundle compatibility
     static final String EXTRA_QS_CUSTOMIZING = "qs_customizing";
 
     private final QSDetailClipper mClipper;
     private final View mTransparentView;
 
     private boolean isShown;
-    private final RecyclerView mRecyclerView;
     private boolean mCustomizing;
-    private QSContainerController mQsContainerController;
-    private QS mQs;
-    private int mX;
-    private int mY;
     private boolean mOpening;
     private boolean mIsShowingNavBackdrop;
+
+    @Nullable private QSContainerController mQsContainerController;
+    @Nullable private QS mQs;
+
+    private int mX;
+    private int mY;
+
+    // New split-view widgets
+    private final ViewPager2 mActivePager;
+    private final RecyclerView mInactiveRecycler;
+    private final LinearLayout mDotContainer;
 
     public QSCustomizer(Context context, AttributeSet attrs) {
         super(context, attrs);
 
         LayoutInflater.from(getContext()).inflate(R.layout.qs_customize_panel_content, this);
+
         mClipper = new QSDetailClipper(findViewById(R.id.customize_container));
+
+        // ── Toolbar: back-arrow only, NO title, NO reset menu ──
         Toolbar toolbar = findViewById(com.android.internal.R.id.action_bar);
         TypedValue value = new TypedValue();
         mContext.getTheme().resolveAttribute(android.R.attr.homeAsUpIndicator, value, true);
         toolbar.setNavigationIcon(
                 getResources().getDrawable(value.resourceId, mContext.getTheme()));
+        // Deliberately leave title empty and add NO menu items.
 
-        SpannableString resetText = new SpannableString(
-                mContext.getString(com.android.internal.R.string.reset));
-        resetText.setSpan(new ForegroundColorSpan(isNightMode() ?
-                Color.WHITE : Color.BLACK), 0, resetText.length(), 0);
-        toolbar.getMenu().add(Menu.NONE, MENU_RESET, 0, resetText);
-        toolbar.setTitle(R.string.qs_edit);
-        mRecyclerView = findViewById(android.R.id.list);
-        mTransparentView = findViewById(R.id.customizer_transparent_view);
-        DefaultItemAnimator animator = new DefaultItemAnimator();
-        animator.setMoveDuration(TileAdapter.MOVE_DURATION);
-        mRecyclerView.setItemAnimator(animator);
+        // ── New split-architecture views ──
+        mActivePager      = findViewById(R.id.active_tiles_pager);
+        mInactiveRecycler = findViewById(R.id.inactive_tiles_recycler);
+        mDotContainer     = findViewById(R.id.page_indicator_container);
+        mTransparentView  = findViewById(R.id.customizer_transparent_view);
 
         updateTransparentViewHeight();
     }
 
-    private boolean isNightMode() {
-        return (mContext.getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-    }
+    // -------------------------------------------------------------------------
+    // Public accessors used by QSCustomizerController
+    // -------------------------------------------------------------------------
+
+    ViewPager2 getActivePager()       { return mActivePager; }
+    RecyclerView getInactiveRecycler(){ return mInactiveRecycler; }
+    LinearLayout getDotContainer()    { return mDotContainer; }
+
+    // -------------------------------------------------------------------------
+    // Resource / config updates
+    // -------------------------------------------------------------------------
 
     void updateResources() {
         updateTransparentViewHeight();
-        mRecyclerView.getAdapter().notifyItemChanged(0);
     }
 
     void updateNavBackDrop(Configuration newConfig, LightBarController lightBarController) {
@@ -117,45 +126,34 @@ public class QSCustomizer extends LinearLayout {
         lightBarController.setQsCustomizing(mIsShowingNavBackdrop && isShown);
     }
 
-    public void setContainerController(QSContainerController controller) {
-        mQsContainerController = controller;
-    }
+    // -------------------------------------------------------------------------
+    // Show / hide
+    // -------------------------------------------------------------------------
 
-    public void setQs(@Nullable QS qs) {
-        mQs = qs;
-    }
-
-    private void reloadAdapterTileHeight(@Nullable RecyclerView.Adapter adapter) {
-        if (adapter instanceof TileAdapter) {
-            ((TileAdapter) adapter).reloadTileHeight();
-        }
-    }
-
-    /** Animate and show QSCustomizer panel.
-     * @param x,y Location on screen of {@code edit} button to determine center of animation.
+    /**
+     * Animate the panel open from the edit button location.
+     *
+     * @param x,y Screen coordinates of the edit button (animation origin).
+     * @param adapter The fully-configured {@link NothingQSCustomizerAdapter}.
      */
-    void show(int x, int y, TileAdapter tileAdapter) {
+    void show(int x, int y, NothingQSCustomizerAdapter adapter) {
         if (!isShown) {
-            reloadAdapterTileHeight(tileAdapter);
-            mRecyclerView.getLayoutManager().scrollToPosition(0);
-            int[] containerLocation = findViewById(R.id.customize_container).getLocationOnScreen();
+            int[] containerLocation =
+                    findViewById(R.id.customize_container).getLocationOnScreen();
             mX = x - containerLocation[0];
             mY = y - containerLocation[1];
             isShown = true;
             mOpening = true;
             setVisibility(View.VISIBLE);
             long duration = mClipper.animateCircularClip(
-                    mX, mY, true, new ExpandAnimatorListener(tileAdapter));
+                    mX, mY, true, new ExpandAnimatorListener(adapter));
             mQsContainerController.setCustomizerAnimating(true);
             mQsContainerController.setCustomizerShowing(true, duration);
         }
     }
 
-
     void showImmediately() {
         if (!isShown) {
-            reloadAdapterTileHeight(mRecyclerView.getAdapter());
-            mRecyclerView.getLayoutManager().scrollToPosition(0);
             setVisibility(VISIBLE);
             mClipper.cancelAnimator();
             mClipper.showBackground();
@@ -171,12 +169,11 @@ public class QSCustomizer extends LinearLayout {
         if (isShown) {
             isShown = false;
             mClipper.cancelAnimator();
-            // Make sure we're not opening (because we're closing). Nobody can think we are
-            // customizing after the next two lines.
             mOpening = false;
             long duration = 0;
             if (animate) {
-                duration = mClipper.animateCircularClip(mX, mY, false, mCollapseAnimationListener);
+                duration = mClipper.animateCircularClip(
+                        mX, mY, false, mCollapseAnimationListener);
             } else {
                 setVisibility(View.GONE);
             }
@@ -185,77 +182,75 @@ public class QSCustomizer extends LinearLayout {
         }
     }
 
-    public boolean isShown() {
-        return isShown;
-    }
+    public boolean isShown()         { return isShown; }
+    public boolean isOpening()       { return mOpening; }
+    public boolean isCustomizing()   { return mCustomizing || mOpening; }
 
     void setCustomizing(boolean customizing) {
         mCustomizing = customizing;
-        mQs.notifyCustomizeChanged();
+        if (mQs != null) mQs.notifyCustomizeChanged();
     }
 
-    public boolean isCustomizing() {
-        return mCustomizing || mOpening;
+    public void setContainerController(QSContainerController controller) {
+        mQsContainerController = controller;
     }
 
-    /** @param x,y Location on screen of animation center.
-     */
+    public void setQs(@Nullable QS qs) {
+        mQs = qs;
+    }
+
     public void setEditLocation(int x, int y) {
-        int[] containerLocation = findViewById(R.id.customize_container).getLocationOnScreen();
+        int[] containerLocation =
+                findViewById(R.id.customize_container).getLocationOnScreen();
         mX = x - containerLocation[0];
         mY = y - containerLocation[1];
     }
 
-    class ExpandAnimatorListener extends AnimatorListenerAdapter {
-        private final TileAdapter mTileAdapter;
+    // -------------------------------------------------------------------------
+    // Animation listeners
+    // -------------------------------------------------------------------------
 
-        ExpandAnimatorListener(TileAdapter tileAdapter) {
-            mTileAdapter = tileAdapter;
+    class ExpandAnimatorListener extends AnimatorListenerAdapter {
+        private final NothingQSCustomizerAdapter mAdapter;
+
+        ExpandAnimatorListener(NothingQSCustomizerAdapter adapter) {
+            mAdapter = adapter;
         }
 
         @Override
         public void onAnimationEnd(Animator animation) {
-            if (isShown) {
-                setCustomizing(true);
-            }
+            if (isShown) setCustomizing(true);
             mOpening = false;
             mQsContainerController.setCustomizerAnimating(false);
-            mRecyclerView.setAdapter(mTileAdapter);
+            // Adapters are already attached by the controller — nothing to do here.
         }
 
         @Override
         public void onAnimationCancel(Animator animation) {
             mOpening = false;
-            mQs.notifyCustomizeChanged();
+            if (mQs != null) mQs.notifyCustomizeChanged();
             mQsContainerController.setCustomizerAnimating(false);
         }
     }
 
-    private final AnimatorListener mCollapseAnimationListener = new AnimatorListenerAdapter() {
+    private final Animator.AnimatorListener mCollapseAnimationListener =
+            new AnimatorListenerAdapter() {
         @Override
         public void onAnimationEnd(Animator animation) {
-            if (!isShown) {
-                setVisibility(View.GONE);
-            }
+            if (!isShown) setVisibility(View.GONE);
             mQsContainerController.setCustomizerAnimating(false);
         }
 
         @Override
         public void onAnimationCancel(Animator animation) {
-            if (!isShown) {
-                setVisibility(View.GONE);
-            }
+            if (!isShown) setVisibility(View.GONE);
             mQsContainerController.setCustomizerAnimating(false);
         }
     };
 
-    public RecyclerView getRecyclerView() {
-        return mRecyclerView;
-    }
-
-    public boolean isOpening() {
-        return mOpening;
-    }
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
 
     private void updateTransparentViewHeight() {
         LayoutParams lp = (LayoutParams) mTransparentView.getLayoutParams();

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Dot indicator for the active-tiles pager.
+     Used as the background of each indicator dot View in page_indicator_container.
+     Active dot = white full opacity; inactive dot = white 40% opacity.
+     Both are circular (shape=oval, same width and height).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFFFFFFF" />
+</shape>

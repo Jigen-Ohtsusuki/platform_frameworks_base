@@ -17,24 +17,15 @@
 package com.android.systemui.qs.customize;
 
 import static com.android.systemui.qs.customize.QSCustomizer.EXTRA_QS_CUSTOMIZING;
-import static com.android.systemui.qs.customize.QSCustomizer.MENU_RESET;
 
 import android.content.res.Configuration;
-import android.graphics.Rect;
 import android.os.Bundle;
-import android.view.MenuItem;
 import android.view.View;
-import android.widget.TextView;
 import android.widget.Toolbar;
-import android.widget.Toolbar.OnMenuItemClickListener;
 
 import androidx.annotation.Nullable;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.internal.logging.UiEventLogger;
-import com.android.systemui.R;
 import com.android.systemui.keyguard.ScreenLifecycle;
 import com.android.systemui.plugins.qs.QSContainerController;
 import com.android.systemui.plugins.qs.QSTile;
@@ -53,29 +44,34 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-/** {@link ViewController} for {@link QSCustomizer}. */
+/**
+ * {@link ViewController} for the Nothing-OS-style {@link QSCustomizer}.
+ *
+ * <p>Key differences from AOSP {@code QSCustomizerController}:
+ * <ul>
+ *   <li>Uses {@link NothingQSCustomizerAdapter} instead of {@link TileAdapter}.</li>
+ *   <li>No reset menu item — the toolbar only exposes a back-arrow.</li>
+ *   <li>Attaches the adapter's three view references (pager, recycler, dots) in
+ *       {@link #onViewAttached}.</li>
+ * </ul>
+ */
 @QSScope
 public class QSCustomizerController extends ViewController<QSCustomizer> {
+
     private final TileQueryHelper mTileQueryHelper;
     private final QSHost mQsHost;
-    private final TileAdapter mTileAdapter;
+    private final NothingQSCustomizerAdapter mAdapter;
     private final ScreenLifecycle mScreenLifecycle;
     private final KeyguardStateController mKeyguardStateController;
     private final LightBarController mLightBarController;
     private final ConfigurationController mConfigurationController;
     private final UiEventLogger mUiEventLogger;
+
     private final Toolbar mToolbar;
 
-    private final OnMenuItemClickListener mOnMenuItemClickListener = new OnMenuItemClickListener() {
-        @Override
-        public boolean onMenuItemClick(MenuItem item) {
-            if (item.getItemId() == MENU_RESET) {
-                mUiEventLogger.log(QSEditEvent.QS_EDIT_RESET);
-                reset();
-            }
-            return false;
-        }
-    };
+    // -------------------------------------------------------------------------
+    // Callbacks
+    // -------------------------------------------------------------------------
 
     private final KeyguardStateController.Callback mKeyguardCallback =
             new KeyguardStateController.Callback() {
@@ -93,103 +89,97 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
         public void onConfigChanged(Configuration newConfig) {
             mView.updateNavBackDrop(newConfig, mLightBarController);
             mView.updateResources();
-            if (mTileAdapter.updateNumColumns()) {
-                RecyclerView.LayoutManager lm = mView.getRecyclerView().getLayoutManager();
-                if (lm instanceof GridLayoutManager) {
-                    ((GridLayoutManager) lm).setSpanCount(mTileAdapter.getNumColumns());
-                }
-            }
+            // Tile height may have changed (font scaling); ask adapter to reload
+            mAdapter.reloadTileHeight();
         }
     };
 
+    // -------------------------------------------------------------------------
+    // Constructor — injected
+    // -------------------------------------------------------------------------
+
     @Inject
-    protected QSCustomizerController(QSCustomizer view, TileQueryHelper tileQueryHelper,
-            QSHost qsHost, TileAdapter tileAdapter, ScreenLifecycle screenLifecycle,
-            KeyguardStateController keyguardStateController, LightBarController lightBarController,
-            ConfigurationController configurationController, UiEventLogger uiEventLogger) {
+    protected QSCustomizerController(
+            QSCustomizer view,
+            TileQueryHelper tileQueryHelper,
+            QSHost qsHost,
+            NothingQSCustomizerAdapter adapter,
+            ScreenLifecycle screenLifecycle,
+            KeyguardStateController keyguardStateController,
+            LightBarController lightBarController,
+            ConfigurationController configurationController,
+            UiEventLogger uiEventLogger) {
         super(view);
-        mTileQueryHelper = tileQueryHelper;
-        mQsHost = qsHost;
-        mTileAdapter = tileAdapter;
-        mScreenLifecycle = screenLifecycle;
-        mKeyguardStateController = keyguardStateController;
-        mLightBarController = lightBarController;
-        mConfigurationController = configurationController;
-        mUiEventLogger = uiEventLogger;
+        mTileQueryHelper    = tileQueryHelper;
+        mQsHost             = qsHost;
+        mAdapter            = adapter;
+        mScreenLifecycle    = screenLifecycle;
+        mKeyguardStateController    = keyguardStateController;
+        mLightBarController         = lightBarController;
+        mConfigurationController    = configurationController;
+        mUiEventLogger              = uiEventLogger;
 
         mToolbar = mView.findViewById(com.android.internal.R.id.action_bar);
     }
 
+    // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
 
     @Override
     protected void onViewAttached() {
         mView.updateNavBackDrop(getResources().getConfiguration(), mLightBarController);
-
         mConfigurationController.addCallback(mConfigurationListener);
 
-        mTileQueryHelper.setListener(mTileAdapter);
-        int halfMargin =
-                getResources().getDimensionPixelSize(R.dimen.qs_tile_margin_horizontal) / 2;
-        mTileAdapter.changeHalfMargin(halfMargin);
+        // Wire the TileQueryHelper → adapter
+        mTileQueryHelper.setListener(mAdapter);
 
-        RecyclerView recyclerView = mView.getRecyclerView();
-        recyclerView.setAdapter(mTileAdapter);
-        mTileAdapter.getItemTouchHelper().attachToRecyclerView(recyclerView);
-        GridLayoutManager layout =
-                new GridLayoutManager(getContext(), mTileAdapter.getNumColumns()) {
-            @Override
-            public void onInitializeAccessibilityNodeInfoForItem(RecyclerView.Recycler recycler,
-                    RecyclerView.State state, View host, AccessibilityNodeInfoCompat info) {
-                // Do not read row and column every time it changes.
-            }
+        // Attach the adapter's view references
+        mAdapter.attachViews(
+                mView.getActivePager(),
+                mView.getInactiveRecycler(),
+                mView.getDotContainer());
 
-            public void calculateItemDecorationsForChild(View child, Rect outRect) {
-                // There's only a single item decoration that cares about the itemOffsets, so
-                // we just call it manually so they are never cached. This way, it's updated as the
-                // tiles are moved around.
-                // It only sets the left and right margin and only cares about tiles (not TextView).
-                if (!(child instanceof TextView)) {
-                    outRect.setEmpty();
-                    mTileAdapter.getMarginItemDecoration().getItemOffsets(outRect, child,
-                            recyclerView, new RecyclerView.State());
-                    ((LayoutParams) child.getLayoutParams()).leftMargin = outRect.left;
-                    ((LayoutParams) child.getLayoutParams()).rightMargin = outRect.right;
-                }
-            }
-        };
-        layout.setSpanSizeLookup(mTileAdapter.getSizeLookup());
-        recyclerView.setLayoutManager(layout);
-        recyclerView.addItemDecoration(mTileAdapter.getItemDecoration());
-        recyclerView.addItemDecoration(mTileAdapter.getMarginItemDecoration());
-
-        mToolbar.setOnMenuItemClickListener(mOnMenuItemClickListener);
+        // Toolbar: back-arrow only
         mToolbar.setNavigationOnClickListener(v -> hide());
+        // Explicitly clear any menu items (safety net)
+        mToolbar.getMenu().clear();
+        // No title
+        mToolbar.setTitle(null);
     }
 
     @Override
     protected void onViewDetached() {
         mTileQueryHelper.setListener(null);
-        mToolbar.setOnMenuItemClickListener(null);
         mConfigurationController.removeCallback(mConfigurationListener);
+        mToolbar.setNavigationOnClickListener(null);
     }
 
-
-    private void reset() {
-        mTileAdapter.resetTileSpecs(QSHost.getDefaultSpecs(getContext().getResources()));
-    }
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
     public boolean isCustomizing() {
         return mView.isCustomizing();
     }
 
-    /** */
+    public boolean isShown() {
+        return mView.isShown();
+    }
+
+    /**
+     * Show the customizer, optionally immediately (no animation).
+     *
+     * @param x,y Origin of the circular-reveal animation (screen coords of edit button).
+     * @param immediate Skip animation.
+     */
     public void show(int x, int y, boolean immediate) {
         if (!mView.isShown()) {
             setTileSpecs();
             if (immediate) {
                 mView.showImmediately();
             } else {
-                mView.show(x, y, mTileAdapter);
+                mView.show(x, y, mAdapter);
                 mUiEventLogger.log(QSEditEvent.QS_EDIT_OPEN);
             }
             mTileQueryHelper.queryTiles(mQsHost);
@@ -198,34 +188,24 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
         }
     }
 
+    /** Hide the customizer and save tile order. */
+    public void hide() {
+        final boolean animate =
+                mScreenLifecycle.getScreenState() != ScreenLifecycle.SCREEN_OFF;
+        if (mView.isShown()) {
+            mUiEventLogger.log(QSEditEvent.QS_EDIT_CLOSED);
+            mToolbar.dismissPopupMenus();
+            mView.setCustomizing(false);
+            save();
+            mView.hide(animate);
+            mView.updateNavColors(mLightBarController);
+            mKeyguardStateController.removeCallback(mKeyguardCallback);
+        }
+    }
+
     /** */
     public void setQs(@Nullable QSFragment qsFragment) {
         mView.setQs(qsFragment);
-    }
-
-    /** */
-    public void restoreInstanceState(Bundle savedInstanceState) {
-        boolean customizing = savedInstanceState.getBoolean(EXTRA_QS_CUSTOMIZING);
-        if (customizing) {
-            mView.setVisibility(View.VISIBLE);
-            mView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-                @Override
-                public void onLayoutChange(View v, int left, int top, int right, int bottom,
-                        int oldLeft,
-                        int oldTop, int oldRight, int oldBottom) {
-                    mView.removeOnLayoutChangeListener(this);
-                    show(0, 0, true);
-                }
-            });
-        }
-    }
-
-    /** */
-    public void saveInstanceState(Bundle outState) {
-        if (mView.isShown()) {
-            mKeyguardStateController.removeCallback(mKeyguardCallback);
-        }
-        outState.putBoolean(EXTRA_QS_CUSTOMIZING, mView.isCustomizing());
     }
 
     /** */
@@ -238,27 +218,37 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
         mView.setContainerController(controller);
     }
 
-    public boolean isShown() {
-        return mView.isShown();
-    }
-
-    /** Hice the customizer. */
-    public void hide() {
-        final boolean animate = mScreenLifecycle.getScreenState() != ScreenLifecycle.SCREEN_OFF;
-        if (mView.isShown()) {
-            mUiEventLogger.log(QSEditEvent.QS_EDIT_CLOSED);
-            mToolbar.dismissPopupMenus();
-            mView.setCustomizing(false);
-            save();
-            mView.hide(animate);
-            mView.updateNavColors(mLightBarController);
-            mKeyguardStateController.removeCallback(mKeyguardCallback);
+    /** Restore customizer visibility state after process restart. */
+    public void restoreInstanceState(Bundle savedInstanceState) {
+        boolean customizing = savedInstanceState.getBoolean(EXTRA_QS_CUSTOMIZING);
+        if (customizing) {
+            mView.setVisibility(View.VISIBLE);
+            mView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View v, int left, int top, int right, int bottom,
+                        int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                    mView.removeOnLayoutChangeListener(this);
+                    show(0, 0, true);
+                }
+            });
         }
     }
 
+    /** Save customizer open/close state to bundle. */
+    public void saveInstanceState(Bundle outState) {
+        if (mView.isShown()) {
+            mKeyguardStateController.removeCallback(mKeyguardCallback);
+        }
+        outState.putBoolean(EXTRA_QS_CUSTOMIZING, mView.isCustomizing());
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
     private void save() {
         if (mTileQueryHelper.isFinished()) {
-            mTileAdapter.saveSpecs(mQsHost);
+            mAdapter.saveSpecs(mQsHost);
         }
     }
 
@@ -267,6 +257,6 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
         for (QSTile tile : mQsHost.getTiles()) {
             specs.add(tile.getTileSpec());
         }
-        mTileAdapter.setTileSpecs(specs);
+        mAdapter.setTileSpecs(specs);
     }
 }

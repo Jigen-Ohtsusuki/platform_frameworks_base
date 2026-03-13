@@ -173,7 +173,7 @@
 
     <dimen name="notification_max_heads_up_height_increased">188dp</dimen>
 
-    <dimen name="notification_side_paddings">16dp</dimen>
+    <dimen name="notification_side_paddings">24dp</dimen>
 
     <dimen name="heads_up_status_bar_padding">8dp</dimen>
 
@@ -440,7 +440,7 @@
     <dimen name="qqs_layout_padding_bottom">24dp</dimen>
     <item name="qqs_expand_clock_scale" format="float" type="dimen">2.57</item>
 
-    <dimen name="qs_horizontal_margin">58px</dimen>
+    <dimen name="qs_horizontal_margin">76px</dimen>
 
     <dimen name="qs_content_horizontal_padding">@dimen/notification_shade_content_margin_horizontal</dimen>
 
@@ -1378,12 +1378,12 @@
     <dimen name="bouncer_user_switcher_view_mode_user_switcher_bottom_margin">0dp</dimen>
     <dimen name="bouncer_user_switcher_view_mode_view_flipper_bottom_margin">0dp</dimen>
 
-    <dimen name="qs_tile_height">184px</dimen>
-    <dimen name="qs_quick_tile_size">184px</dimen>
-    <dimen name="qs_corner_radius">92px</dimen>
+    <dimen name="qs_tile_height">176px</dimen>
+    <dimen name="qs_quick_tile_size">176px</dimen>
+    <dimen name="qs_corner_radius">88px</dimen>
 
     <dimen name="qs_tile_margin_horizontal">58px</dimen>
-    <dimen name="qs_tile_margin_vertical">60px</dimen>
+    <dimen name="qs_tile_margin_vertical">58px</dimen>
     
     <dimen name="qs_tile_padding">0px</dimen>
     <dimen name="qs_tile_start_padding">40px</dimen>
@@ -1392,7 +1392,7 @@
     <dimen name="qs_label_container_margin">0px</dimen>
 
     <dimen name="qs_pill_divider_width">3px</dimen>
-    <dimen name="qs_pill_divider_height">70px</dimen>
+    <dimen name="qs_pill_divider_height">40px</dimen>
     <dimen name="qs_pill_divider_margin_start">40px</dimen>
     <dimen name="qs_pill_divider_margin_end">40px</dimen>
 
@@ -1400,6 +1400,6 @@
     <dimen name="qs_drawable_end_margin">0px</dimen>
     <dimen name="qs_secondary_label_text_size">0px</dimen>
 
-    <dimen name="qs_resize_handle_size">24px</dimen>
-    <dimen name="qs_resize_handle_margin">8px</dimen>
+    <dimen name="qs_resize_handle_size">56px</dimen>
+    <dimen name="qs_resize_handle_margin">32px</dimen>
 </resources>

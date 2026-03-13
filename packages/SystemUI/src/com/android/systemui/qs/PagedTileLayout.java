@@ -523,9 +523,37 @@ public class PagedTileLayout extends ViewPager implements QSTileLayout {
     }
 
     public int getNumPages() {
-        final int nTiles = mTiles.size();
-        int numPages = Math.max(nTiles / 8, 1); 
-        return numPages;
+        int pageIndex = 0;
+        int currentRow = 0;
+        int currentColumn = 0;
+        int maxColumns = 4;
+        int maxRows = 4;
+
+        for (int i = 0; i < mTiles.size(); i++) {
+            TileRecord tile = mTiles.get(i);
+            boolean isCircle = isTileCircle(tile.tile.getTileSpec());
+            int span = isCircle ? 1 : 2;
+
+            if (currentColumn + span > maxColumns) {
+                currentRow++;
+                currentColumn = 0;
+            }
+
+            if (currentRow >= maxRows) {
+                pageIndex++;
+                currentRow = 0;
+                currentColumn = 0;
+            }
+
+            currentColumn += span;
+
+            if (currentColumn >= maxColumns) {
+                currentRow++;
+                currentColumn = 0;
+            }
+        }
+
+        return Math.max(pageIndex + 1, 1);
     }
 
     public int getNumVisibleTiles() {
