@@ -168,7 +168,18 @@ class LegacySizeSpecSource(
         val overrideMinSize = mOverrideMinSize ?: return null
         return if (overrideMinSize.width < mOverridableMinSize ||
                 overrideMinSize.height < mOverridableMinSize) {
-            Size(mOverridableMinSize, mOverridableMinSize)
+            val aspectRatio = overrideMinSize.width.toFloat() / overrideMinSize.height.toFloat()
+            var w = overrideMinSize.width
+            var h = overrideMinSize.height
+            if (w < mOverridableMinSize) {
+                w = mOverridableMinSize
+                h = (w / aspectRatio).toInt()
+            }
+            if (h < mOverridableMinSize) {
+                h = mOverridableMinSize
+                w = (h * aspectRatio).toInt()
+            }
+            Size(w, h)
         } else {
             overrideMinSize
         }

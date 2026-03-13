@@ -446,7 +446,7 @@ public final class GnssStatus implements Parcelable {
          */
         @NonNull
         public Builder addSatellite(@ConstellationType int constellationType,
-                @IntRange(from = 1, to = 200) int svid,
+                @IntRange(from = 1, to = 206) int svid,
                 @FloatRange(from = 0, to = 63) float cn0DbHz,
                 @FloatRange(from = -90, to = 90) float elevation,
                 @FloatRange(from = 0, to = 360) float azimuth,
@@ -485,23 +485,14 @@ public final class GnssStatus implements Parcelable {
             float[] carrierFrequencies = new float[svCount];
             float[] basebandCn0DbHzs = new float[svCount];
 
-            for (int i = 0; i < svidWithFlags.length; i++) {
-                svidWithFlags[i] = mSatellites.get(i).mSvidWithFlags;
-            }
-            for (int i = 0; i < cn0DbHzs.length; i++) {
-                cn0DbHzs[i] = mSatellites.get(i).mCn0DbHz;
-            }
-            for (int i = 0; i < elevations.length; i++) {
-                elevations[i] = mSatellites.get(i).mElevation;
-            }
-            for (int i = 0; i < azimuths.length; i++) {
-                azimuths[i] = mSatellites.get(i).mAzimuth;
-            }
-            for (int i = 0; i < carrierFrequencies.length; i++) {
-                carrierFrequencies[i] = mSatellites.get(i).mCarrierFrequency;
-            }
-            for (int i = 0; i < basebandCn0DbHzs.length; i++) {
-                basebandCn0DbHzs[i] = mSatellites.get(i).mBasebandCn0DbHz;
+            for (int i = 0; i < svCount; i++) {
+                GnssSvInfo info = mSatellites.get(i);
+                svidWithFlags[i] = info.mSvidWithFlags;
+                cn0DbHzs[i] = info.mCn0DbHz;
+                elevations[i] = info.mElevation;
+                azimuths[i] = info.mAzimuth;
+                carrierFrequencies[i] = info.mCarrierFrequency;
+                basebandCn0DbHzs[i] = info.mBasebandCn0DbHz;
             }
 
             return new GnssStatus(svCount, svidWithFlags, cn0DbHzs, elevations, azimuths,

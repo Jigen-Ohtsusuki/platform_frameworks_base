@@ -160,6 +160,18 @@ public class ConversationHeaderLinearLayout extends LinearLayout {
             excessContents -= excessRemovedDuringThisPass;
             weightSum = weightSumForNextPass;
         }
+
+        // After the main loop, some excess may remain due to rounding.
+        // Distribute the remaining excess one pixel at a time to views that can still be shrunk.
+        if (excessContents > 0) {
+            for (ViewInfo info : viewInfos) {
+                if (excessContents <= 0) break;
+                if (info.mWeight > 0 && info.mWidth > 0) {
+                    info.mWidth--;
+                    excessContents--;
+                }
+            }
+        }
     }
 
     /**

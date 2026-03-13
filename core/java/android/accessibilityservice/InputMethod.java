@@ -509,7 +509,7 @@ public class InputMethod {
         public void updateSelection(int oldSelStart, int oldSelEnd, int newSelStart,
                 int newSelEnd, int candidatesStart, int candidatesEnd) {
             if (mEnabled) {
-                InputMethod.this.onUpdateSelection(oldSelEnd, oldSelEnd, newSelStart,
+                InputMethod.this.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart,
                         newSelEnd, candidatesStart, candidatesEnd);
             }
         }

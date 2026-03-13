@@ -110,8 +110,10 @@ void Layer::draw(SkCanvas* canvas) {
         textureMatrixInv.preScale(1.0f / layerWidth, 1.0f / layerHeight);
         textureMatrixInv.postScale(layerImage->width(), layerImage->height());
         SkMatrix textureMatrix;
-        if (!textureMatrixInv.invert(&textureMatrix)) {
-            textureMatrix = textureMatrixInv;
+        if (!textureMatrixInv.invert(&textureMatrix)) { // failed to invert
+            // A failed inversion indicates a singular matrix, which means the layer has
+            // zero width or height. In this case, there is nothing to draw.
+            return;
         }
 
         SkMatrix matrix;

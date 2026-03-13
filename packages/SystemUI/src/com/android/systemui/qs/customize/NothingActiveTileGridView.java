@@ -107,12 +107,11 @@ public class NothingActiveTileGridView extends ViewGroup {
 
     public void setTileChildren(List<View> views) {
         // FIX: Crash prevented! Copy values to a separate list before canceling to avoid ConcurrentModificationException
-        List<Animator> anims = new ArrayList<>(mRunningAnimators.values());
-        mRunningAnimators.clear();
-        for (Animator a : anims) {
-            a.cancel();
+        if (!mRunningAnimators.isEmpty()) {
+            for (Animator anim : new ArrayList<>(mRunningAnimators.values())) {
+                anim.cancel();
+            }
         }
-        
         mOldPositions.clear();
         for (int i = 0; i < getChildCount(); i++) {
             View c = getChildAt(i);
