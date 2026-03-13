@@ -58,13 +58,18 @@ public class LinearLayoutWithDefaultTouchRecepient extends LinearLayout {
             return super.dispatchTouchEvent(ev);
         }
 
+        // If a child handled it, we're done.
         if (super.dispatchTouchEvent(ev)) {
             return true;
         }
+        // In case no child handled the event, give it to the default recepient.
+        // We need to offset the event to be in the recepient's coordinate space.
         mTempRect.set(0, 0, 0, 0);
         offsetRectIntoDescendantCoords(mDefaultTouchRecepient, mTempRect);
-        ev.setLocation(ev.getX() + mTempRect.left, ev.getY() + mTempRect.top);
-        return mDefaultTouchRecepient.dispatchTouchEvent(ev);
+        ev.offsetLocation(mTempRect.left, mTempRect.top);
+        final boolean handled = mDefaultTouchRecepient.dispatchTouchEvent(ev);
+        ev.offsetLocation(-mTempRect.left, -mTempRect.top); // Restore original location
+        return handled;
     }
 
 }

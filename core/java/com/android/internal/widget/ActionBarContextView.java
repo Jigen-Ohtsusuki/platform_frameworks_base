@@ -241,7 +241,7 @@ public class ActionBarContextView extends AbsActionBarView {
             layoutParams.height = mContentHeight;
             menu.addMenuPresenter(mActionMenuPresenter, mPopupContext);
             mMenuView = (ActionMenuView) mActionMenuPresenter.getMenuView(this);
-            mMenuView.setBackgroundDrawable(mSplitBackground);
+            mMenuView.setBackground(mSplitBackground);
             mSplitView.addView(mMenuView, layoutParams);
         }
     }

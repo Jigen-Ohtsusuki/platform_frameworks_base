@@ -1048,7 +1048,7 @@ public class Location implements Parcelable {
             if (l.hasMslAltitudeAccuracy()) {
                 l.mMslAltitudeAccuracyMeters = in.readFloat();
             }
-            l.mExtras = Bundle.setDefusable(in.readBundle(), true);
+            l.mExtras = Bundle.setDefusable(in.readBundle(getClass().getClassLoader()), true);
             return l;
         }
 

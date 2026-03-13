@@ -80,7 +80,7 @@ public class AccountItemView extends LinearLayout {
     }
 
     public void setAccountIcon(Drawable drawable) {
-        mAccountIcon.setBackgroundDrawable(drawable);
+        mAccountIcon.setBackground(drawable);
     }
 
     public void setAccountName(String name) {
