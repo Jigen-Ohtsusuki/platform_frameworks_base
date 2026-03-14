@@ -184,6 +184,9 @@ public class QSPanel extends LinearLayout implements Tunable {
         if (mBrightnessView != null) {
             addView(mBrightnessView);
             mMovableContentStartIndex++;
+            
+            ViewGroup parent = mUsingHorizontalLayout ? mHorizontalContentContainer : this;
+            switchAllContentToParent(parent, mTileLayout);
         }
     }
 
@@ -338,8 +341,7 @@ public class QSPanel extends LinearLayout implements Tunable {
     private void updatePageIndicator() {
         if (mTileLayout instanceof PagedTileLayout) {
             if (mFooterPageIndicator != null) {
-                mFooterPageIndicator.setVisibility(View.GONE);
-
+                // Ensure it isn't forced GONE here
                 ((PagedTileLayout) mTileLayout).setPageIndicator(mFooterPageIndicator);
             }
         }
@@ -409,16 +411,21 @@ public class QSPanel extends LinearLayout implements Tunable {
     private void switchAllContentToParent(ViewGroup parent, QSTileLayout newLayout) {
         int index = parent == this ? mMovableContentStartIndex : 0;
 
-        switchToParent((View) newLayout, parent, index);
-        index++;
-
-        if (mBrightnessView != null) {
-            switchToParent(mBrightnessView, parent, index);
+        // 1. Tiles go FIRST
+        if (newLayout != null) {
+            switchToParent((View) newLayout, parent, index);
             index++;
         }
 
+        // 2. Footer (Dots + Edit Button) goes SECOND
         if (mFooter != null) {
             switchToParent(mFooter, parent, index);
+            index++;
+        }
+
+        // 3. Brightness Slider goes THIRD (Absolute Bottom)
+        if (mBrightnessView != null) {
+            switchToParent(mBrightnessView, parent, index);
             index++;
         }
     }
@@ -668,6 +675,7 @@ public class QSPanel extends LinearLayout implements Tunable {
             if (currentParent != null) {
                 currentParent.removeView(child);
             }
+            index = Math.min(index, parent.getChildCount());
             parent.addView(child, index);
             return;
         }
@@ -676,6 +684,7 @@ public class QSPanel extends LinearLayout implements Tunable {
             return;
         }
         parent.removeView(child);
+        index = Math.min(index, parent.getChildCount());
         parent.addView(child, index);
     }
 }
